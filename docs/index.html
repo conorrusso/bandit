@@ -775,7 +775,7 @@
   </div>
 
   <h1 class="hero-title">THE PRIVACY LENS</h1>
-  <p class="hero-sub">AI-Powered Vendor Privacy &amp; Contract Risk Analyzer<br><span>// open source · n8n · claude api · anecdotes</span></p>
+  <p class="hero-sub">AI-Powered Vendor Privacy &amp; Contract Risk Analyzer<br><span>// open source · n8n · claude api · ai-agnostic</span></p>
 
   <div class="badge-row">
     <span class="badge badge-blue">v0.1.0</span>
@@ -834,7 +834,7 @@
     <div class="pipe-stage">
       <span class="pipe-icon">⚡</span>
       <span class="pipe-name">ACT</span>
-      <span class="pipe-desc">Routes to legal, vendor, Anecdotes, or escalation — automatically. No manual triage.</span>
+      <span class="pipe-desc">Routes to legal, vendor, GRC system, or escalation — automatically. No manual triage.</span>
     </div>
   </div>
 
@@ -950,7 +950,7 @@
         <li>Legal email with Contract Negotiation Brief</li>
         <li>Slack alert → #legal-privacy-review</li>
         <li>Claude drafts suggested contract language</li>
-        <li>Anecdotes vendor record → HIGH tier</li>
+        <li>GRC vendor record → HIGH tier</li>
       </ul>
     </div>
 
@@ -961,7 +961,7 @@
         <li>Targeted follow-up questionnaire generated</li>
         <li>Email sent to vendor (gaps only)</li>
         <li>Jira ticket → Priority: MEDIUM</li>
-        <li>Anecdotes vendor record → MEDIUM tier</li>
+        <li>GRC vendor record → MEDIUM tier</li>
       </ul>
     </div>
 
@@ -969,7 +969,7 @@
       <div class="tier-label">🟢 LOW RISK</div>
       <div class="tier-trigger">Weighted avg &gt; 3.5 · no dimension below 3</div>
       <ul class="tier-action">
-        <li>AI summary logged as Anecdotes evidence</li>
+        <li>AI summary logged as GRC evidence</li>
         <li>Vendor record → LOW tier</li>
         <li>Requestor notified with clean summary</li>
         <li>Fully automated — zero manual triage</li>
@@ -1008,9 +1008,9 @@
       <span class="stack-role">AI analysis engine</span>
     </div>
     <div class="stack-cell">
-      <span class="stack-icon">🗂️</span>
-      <span class="stack-name">ANECDOTES</span>
-      <span class="stack-role">GRC system of record</span>
+      <span class="stack-icon">📁</span>
+      <span class="stack-name">GOOGLE DRIVE</span>
+      <span class="stack-role">Report storage</span>
     </div>
     <div class="stack-cell">
       <span class="stack-icon">🎫</span>
@@ -1105,10 +1105,10 @@
 
   </div>
 
-  <!-- LIVE ASSESSMENT: ANECDOTES -->
+  <!-- LIVE ASSESSMENT: SAMPLE -->
   <div class="section-header">
     <div class="section-num">06</div>
-    <div class="section-title">LIVE ASSESSMENT: ANECDOTES A.I LTD</div>
+    <div class="section-title">LIVE ASSESSMENT: ACMECORP INC.</div>
     <div class="section-line"></div>
   </div>
 
@@ -1119,7 +1119,7 @@
     <div style="display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
       <div>
         <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;">VENDOR</div>
-        <div style="font-family:'Press Start 2P',monospace;font-size:13px;color:var(--white);letter-spacing:1px;">Anecdotes A.I Ltd</div>
+        <div style="font-family:'Press Start 2P',monospace;font-size:13px;color:var(--white);letter-spacing:1px;">AcmeCorp Inc.</div>
       </div>
       <div style="margin-left:auto;text-align:right;">
         <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;">RISK TIER</div>
@@ -1172,7 +1172,7 @@
       <div class="code-block">Import › workflows/ai-vendor-assessment.json<span class="cursor"></span></div>
 
       <p style="font-size:17px; color:var(--dim); margin-bottom:8px; margin-top:16px; letter-spacing:1px;">3. Add credentials + activate</p>
-      <div class="code-block">ANTHROPIC_API_KEY + ANECDOTES_API_KEY<span class="cursor"></span></div>
+      <div class="code-block">ANTHROPIC_API_KEY + GOOGLE_DRIVE_CREDENTIALS<span class="cursor"></span></div>
     </div>
 
     <div style="margin-top:24px;">
@@ -1296,7 +1296,7 @@
 <div class="footer">
   <div class="footer-logo">THE PRIVACY LENS</div>
   <div class="footer-tag">
-    Built by <span>Conor</span> · Compliance &amp; GRC · Anecdotes<br>
+    Built by <span>Conor</span> · Compliance &amp; GRC<br>
     <span>Open Source · MIT License · Contributions Welcome</span>
   </div>
 </div>
