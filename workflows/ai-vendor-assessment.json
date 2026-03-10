@@ -1,0 +1,101 @@
+{
+  "_meta": {
+    "name": "The Privacy Lens — AI Vendor Assessment",
+    "description": "Specialized assessment workflow for AI/ML vendors. Extends PT-1 scoring with EU AI Act 2024 compliance checks: risk classification, transparency obligations, human oversight, and conformity assessment requirements.",
+    "version": "1.0.0",
+    "status": "PLACEHOLDER — import into n8n and configure credentials before use",
+    "n8n_version_required": "1.30+",
+    "supported_ai_providers": ["anthropic", "openai", "google", "mistral", "ollama"]
+  },
+  "_setup_instructions": [
+    "1. Import this file into n8n via Workflows > Import from File",
+    "2. Configure AI provider node with your credentials",
+    "3. Set the EU_AI_ACT_MODE parameter to true for full EU AI Act checks",
+    "4. Configure Jira integration for high-risk AI system tickets (mandatory escalation)"
+  ],
+  "_eu_ai_act_checks": {
+    "prohibited_practices": [
+      "Subliminal manipulation techniques",
+      "Exploitation of vulnerable groups",
+      "Social scoring by public authorities",
+      "Real-time remote biometric identification in public spaces (with exceptions)"
+    ],
+    "high_risk_categories": [
+      "Biometric identification and categorisation",
+      "Critical infrastructure management",
+      "Education and vocational training",
+      "Employment and worker management",
+      "Essential services access (credit, insurance)",
+      "Law enforcement",
+      "Migration and border control",
+      "Justice and democratic processes"
+    ],
+    "transparency_obligations": [
+      "Disclosure of AI interaction to users",
+      "Labelling of AI-generated content (deepfakes)",
+      "GPAI model documentation and transparency"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "n8n-nodes-base.webhook",
+      "name": "Webhook Trigger",
+      "notes": "Accepts POST with: vendor_name, policy_text, product_description, is_eu_facing (boolean)"
+    },
+    {
+      "id": "eu_ai_act_classifier",
+      "type": "n8n-nodes-base.code",
+      "name": "EU AI Act Risk Classifier",
+      "notes": "Pre-screens vendor's AI system category based on product_description before AI analysis"
+    },
+    {
+      "id": "ai_model",
+      "type": "n8n-nodes-langchain.lmChatAnthropic",
+      "name": "AI Model (configure provider here)",
+      "notes": "Replace node type for OpenAI, Google Gemini, Mistral, or Ollama",
+      "parameters": {
+        "model": "claude-opus-4-6",
+        "temperature": 0.1,
+        "max_tokens": 6000
+      }
+    },
+    {
+      "id": "parse_output",
+      "type": "n8n-nodes-base.code",
+      "name": "Parse & Enrich Assessment",
+      "notes": "Merges PT-1 JSON with EU AI Act classification result"
+    },
+    {
+      "id": "high_risk_gate",
+      "type": "n8n-nodes-base.if",
+      "name": "High-Risk AI Gate",
+      "notes": "Routes high-risk AI systems to mandatory DPO escalation path"
+    },
+    {
+      "id": "jira_escalation",
+      "type": "n8n-nodes-base.jira",
+      "name": "Create Escalation Ticket",
+      "notes": "Creates high-priority Jira ticket for DPO review. See /integrations/jira-setup.md"
+    },
+    {
+      "id": "save_report",
+      "type": "n8n-nodes-base.googleDrive",
+      "name": "Save to Vendor Register",
+      "notes": "Appends assessment to AI vendor register in Google Drive"
+    },
+    {
+      "id": "slack_alert",
+      "type": "n8n-nodes-base.slack",
+      "name": "Slack Alert",
+      "notes": "Alerts #privacy-team channel. See /integrations/slack-setup.md"
+    }
+  ],
+  "connections": {
+    "trigger": ["eu_ai_act_classifier"],
+    "eu_ai_act_classifier": ["ai_model"],
+    "ai_model": ["parse_output"],
+    "parse_output": ["high_risk_gate"],
+    "high_risk_gate": ["jira_escalation", "save_report", "slack_alert"]
+  }
+}

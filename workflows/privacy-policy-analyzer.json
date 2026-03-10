@@ -1,0 +1,190 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6956aae9-c939-4d4f-ac77-3fb055df5d66",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://www.anecdotes.ai/privacy-policy",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "2c1ed617-2d31-48c5-9248-f6fd31f12aaa",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data;\n\n// Strip all HTML tags\nlet text = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\ntext = text.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\ntext = text.replace(/<[^>]+>/g, ' ');\n\n// Clean up whitespace\ntext = text.replace(/\\s+/g, ' ').trim();\n\n// Trim to ~12,000 chars to fit in AI context window\ntext = text.substring(0, 12000);\n\nreturn [{ json: { cleanText: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "bffbfa53-63a7-4708-a16d-a82a31869346",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "YOUR_ANTHROPIC_API_KEY"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a privacy risk analyst. Analyze the following privacy policy and score it across 6 dimensions. Return ONLY valid JSON, no other text.\\n\\nSCORING RUBRIC (1-5):\\n1 = Missing or absent\\n2 = Vague or inadequate  \\n3 = Partial - present but incomplete\\n4 = Good - mostly complete\\n5 = Strong - comprehensive and specific\\n\\nDIMENSIONS TO SCORE:\\nD1 - Data Minimization: Are data categories specific? Are retention windows defined?\\nD2 - Sub-Processor Transparency: Is a named sub-processor list published? Is there a change notification mechanism?\\nD3 - Data Subject Rights: Are DSAR/deletion/portability mechanisms described with timelines?\\nD4 - Transfer Mechanisms: Are cross-border transfer mechanisms named (SCCs, BCRs, adequacy)?\\nD5 - Breach Notification: Is there a customer-specific notification SLA in hours/days?\\nD7 - Retention & Deletion: Are specific deletion timelines defined? What happens at contract termination?\\n\\nALSO DETECT:\\n- is_ai_vendor: true if the vendor uses AI/ML in their product or mentions model training\\n- ai_training_risk: true if customer data may be used to train models\\n\\nRETURN THIS EXACT JSON STRUCTURE:\\n{\\n  \\\"vendor\\\": \\\"[extract vendor name from document]\\\",\\n  \\\"assessment_date\\\": \\\"2026-03-10\\\",\\n  \\\"scores\\\": {\\n    \\\"D1_data_minimization\\\": {\\\"score\\\": 0, \\\"rationale\\\": \\\"\\\", \\\"red_flags\\\": []},\\n    \\\"D2_sub_processor\\\": {\\\"score\\\": 0, \\\"rationale\\\": \\\"\\\", \\\"red_flags\\\": []},\\n    \\\"D3_subject_rights\\\": {\\\"score\\\": 0, \\\"rationale\\\": \\\"\\\", \\\"red_flags\\\": []},\\n    \\\"D4_transfer_mechanisms\\\": {\\\"score\\\": 0, \\\"rationale\\\": \\\"\\\", \\\"red_flags\\\": []},\\n    \\\"D5_breach_notification\\\": {\\\"score\\\": 0, \\\"rationale\\\": \\\"\\\", \\\"red_flags\\\": []},\\n    \\\"D7_retention_deletion\\\": {\\\"score\\\": 0, \\\"rationale\\\": \\\"\\\", \\\"red_flags\\\": []}\\n  },\\n  \\\"weighted_average\\\": 0.0,\\n  \\\"risk_tier\\\": \\\"HIGH|MEDIUM|LOW\\\",\\n  \\\"is_ai_vendor\\\": false,\\n  \\\"ai_training_risk\\\": false,\\n  \\\"top_3_findings\\\": []\\n}\\n\\nPRIVACY POLICY TEXT:\\n{{ $json.cleanText }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "75921660-9128-4983-ae9a-8bc74e8750ce",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst rawText = response.content[0].text;\nconst cleaned = rawText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\nconst assessment = JSON.parse(cleaned);\nreturn [{ json: assessment }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "1e08b08c-e832-43cd-b314-6a9fc16ab829",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4e4d4ca7-9f96-4db1-b193-4c90a20abda3",
+              "name": "risk_summary",
+              "value": "={{$json.vendor}} | {{$json.risk_tier}} | Avg: {{$json.weighted_average}} | AI Vendor: {{$json.is_ai_vendor}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        0
+      ],
+      "id": "be0741ee-cfe0-4e61-833c-234a1334773b",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d748fb5e-7c6d-4cac-ac51-612d9ac5a2bd",
+  "meta": {
+    "instanceId": "c3be1ad59fca6da901de0e93ad1256da8e8ca2cb37ef7c63b41ba594ba540d39"
+  },
+  "id": "uHGqEHjmJokauRWo",
+  "tags": []
+}

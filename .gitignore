@@ -1,0 +1,65 @@
+# n8n
+.n8n/
+n8n-data/
+*.n8n.json
+
+# Credentials — never commit API keys or credentials
+credentials.json
+*credentials*.json
+*.env
+.env
+.env.*
+!.env.example
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+private_key*
+service-account*.json
+
+# Local workflow exports with credentials embedded
+workflows/local/
+workflows/*-with-credentials.json
+
+# Node.js (if using n8n npm install or custom nodes)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# Docker
+docker-compose.override.yml
+.docker/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editor
+.vscode/
+.idea/
+*.iml
+.cursor/
+
+# Temp / output
+*.tmp
+*.bak
+output/
+exports/
+reports/local/
+
+# Python (if using scripts)
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/

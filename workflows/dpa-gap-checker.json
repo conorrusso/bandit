@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "name": "The Privacy Lens — DPA Gap Checker",
+    "description": "Checks Data Processing Agreements against a GDPR Article 28 clause checklist. Identifies missing mandatory clauses and generates a gap report.",
+    "version": "1.0.0",
+    "status": "PLACEHOLDER — import into n8n and configure credentials before use",
+    "n8n_version_required": "1.30+",
+    "supported_ai_providers": ["anthropic", "openai", "google", "mistral", "ollama"]
+  },
+  "_setup_instructions": [
+    "1. Import this file into n8n via Workflows > Import from File",
+    "2. Configure AI provider node with your credentials",
+    "3. Optionally connect to Google Drive to ingest DPA documents automatically",
+    "4. Trigger manually or via webhook with DPA text as input"
+  ],
+  "_gdpr_art28_checklist": [
+    "Processing only on documented instructions",
+    "Confidentiality obligations on authorized persons",
+    "Appropriate technical and organisational security measures (Art. 32)",
+    "Sub-processor restrictions and prior written authorization",
+    "Assistance with data subject rights",
+    "Assistance with security, breach notification, DPIA",
+    "Deletion or return of data at contract end",
+    "Provision of audit rights and information to demonstrate compliance"
+  ],
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "n8n-nodes-base.webhook",
+      "name": "Webhook Trigger",
+      "notes": "Accepts POST with: vendor_name, dpa_text"
+    },
+    {
+      "id": "ai_model",
+      "type": "n8n-nodes-langchain.lmChatAnthropic",
+      "name": "AI Model (configure provider here)",
+      "notes": "Replace node type for OpenAI, Google Gemini, Mistral, or Ollama",
+      "parameters": {
+        "model": "claude-opus-4-6",
+        "temperature": 0.1,
+        "max_tokens": 4096
+      }
+    },
+    {
+      "id": "gap_analyzer",
+      "type": "n8n-nodes-base.code",
+      "name": "Compute Gap Score",
+      "notes": "Calculates % clause coverage and flags missing mandatory Art. 28 clauses"
+    },
+    {
+      "id": "output_report",
+      "type": "n8n-nodes-base.googleDrive",
+      "name": "Save Gap Report",
+      "notes": "Saves gap report as Google Doc. See /integrations/google-drive-setup.md"
+    }
+  ],
+  "connections": {
+    "trigger": ["ai_model"],
+    "ai_model": ["gap_analyzer"],
+    "gap_analyzer": ["output_report"]
+  }
+}
