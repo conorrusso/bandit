@@ -1,5 +1,5 @@
 {
-  "name": "My workflow",
+  "name": "privacy-policy-analyzer",
   "nodes": [
     {
       "parameters": {},
@@ -181,7 +181,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "d748fb5e-7c6d-4cac-ac51-612d9ac5a2bd",
+  "versionId": "1696154f-63cc-4cca-889c-f3239901559a",
   "meta": {
     "instanceId": "c3be1ad59fca6da901de0e93ad1256da8e8ca2cb37ef7c63b41ba594ba540d39"
   },
