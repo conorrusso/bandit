@@ -20,6 +20,7 @@ Phase 3 — Scoring (deterministic, no LLM)
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 from core.agents.base_bandit import BaseBandit
 from core.llm.base import BaseLLMProvider
@@ -31,6 +32,21 @@ from core.scoring.rubric import (
 )
 from core.tools.fetch import fetch_url
 from core.tools.parse import html_to_text
+
+
+@dataclass
+class FetchedSource:
+    """Metadata for a single page retrieved during assessment."""
+    url: str
+    chars: int
+    via: str  # "direct" or "jina"
+
+
+@dataclass
+class PrivacyAssessment:
+    """Assessment result plus provenance — which pages were analysed."""
+    result: AssessmentResult
+    sources: list[FetchedSource] = field(default_factory=list)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -52,9 +68,10 @@ Instructions:
    if you find a link to one. This is critical for D8 scoring.
 4. Prioritise pages with "full", "statement", "addendum", "DPA", or
    "processing" in the URL or page title.
-5. Stop when you have substantive policy text (2,000+ words of actual
-   policy/legal content, not navigation).
-6. Do not fetch more than 8 pages total.
+5. Stop as soon as you have substantive policy text (1,500+ words of
+   actual policy/legal content). Do not keep fetching once you have it.
+6. You may fetch at most 5 pages total. The tool will block further fetches
+   after 5, so choose carefully.
 
 Common patterns:
   Privacy policy: /privacy, /privacy-policy, /privacy-statement,
@@ -123,28 +140,33 @@ class PrivacyBandit(BaseBandit):
 
     def __init__(self, provider: BaseLLMProvider) -> None:
         super().__init__(provider)
-        self._fetched_pages: dict[str, str] = {}  # url → clean text
+        self._fetched_pages: dict[str, str] = {}   # url → clean text
+        self._fetch_meta: list[FetchedSource] = []  # ordered fetch log
 
     # ── Tool implementation ───────────────────────────────────────────
 
     # Minimum chars of parsed text before we consider a page usable.
-    # Pages below this threshold are JS-rendered shells — retry via Jina.
-    _MIN_PARSED_CHARS = 500
+    _MIN_PARSED_CHARS = 500  # below this → JS-rendered shell, retry via Jina
+    _MAX_FETCHES = 5         # hard cap on pages fetched per assessment
 
     def _fetch(self, url: str) -> str:
-        """Fetch, parse, cache, and return clean text for a URL.
+        """Fetch, parse, cache, and return clean text for a URL."""
+        # Hard cap — tell the agent to stop rather than raising
+        if len(self._fetch_meta) >= self._MAX_FETCHES:
+            return (
+                f"[fetch limit reached — {self._MAX_FETCHES} pages already retrieved] "
+                "You have enough content. Stop fetching and emit <policy_retrieved>."
+            )
 
-        If the parsed text is below _MIN_PARSED_CHARS (JS-rendered shell),
-        retries via Jina Reader which renders JavaScript before returning.
-        """
         if url in self._fetched_pages:
-            preview = self._fetched_pages[url][:300]
-            return f"[already fetched — preview]\n{preview}…"
+            # Return full cached text so the agent knows it already has it
+            text = self._fetched_pages[url]
+            return f"[already fetched — {len(text):,} chars, no need to fetch again]\n\n{text[:5_000]}…"
 
         raw, source = fetch_url(url)
         text = html_to_text(raw)
 
-        # JS-rendered shell check: if direct fetch gave almost nothing, try Jina
+        # JS-rendered shell check
         if len(text) < self._MIN_PARSED_CHARS and source == "direct":
             try:
                 from core.tools.fetch import _fetch_jina
@@ -156,7 +178,11 @@ class PrivacyBandit(BaseBandit):
                 pass
 
         self._fetched_pages[url] = text
-        return f"[fetched via {source} — {len(text):,} chars]\n\n{text[:40_000]}"
+        self._fetch_meta.append(FetchedSource(url=url, chars=len(text), via=source))
+
+        remaining = self._MAX_FETCHES - len(self._fetch_meta)
+        note = f"[{remaining} fetch(es) remaining]" if remaining > 0 else "[fetch limit reached — stop now]"
+        return f"[fetched via {source} — {len(text):,} chars]  {note}\n\n{text[:40_000]}"
 
     # ── Signal reshaping ─────────────────────────────────────────────
 
@@ -190,7 +216,7 @@ class PrivacyBandit(BaseBandit):
 
     # ── Main assess method ───────────────────────────────────────────
 
-    def assess(self, vendor: str) -> AssessmentResult:
+    def assess(self, vendor: str) -> PrivacyAssessment:
         """Run a full privacy assessment for a vendor.
 
         Parameters
@@ -201,8 +227,8 @@ class PrivacyBandit(BaseBandit):
 
         Returns
         -------
-        AssessmentResult
-            Fully scored assessment with all 8 dimensions.
+        PrivacyAssessment
+            Scored assessment with all 8 dimensions plus source provenance.
 
         Raises
         ------
@@ -210,6 +236,7 @@ class PrivacyBandit(BaseBandit):
             If no policy content could be retrieved.
         """
         self._fetched_pages = {}
+        self._fetch_meta = []
         url = _start_url(vendor)
 
         # ── Phase 1: Discovery + fetch ────────────────────────────────
@@ -244,9 +271,10 @@ class PrivacyBandit(BaseBandit):
 
         # ── Phase 3: Deterministic scoring ───────────────────────────
         per_dim, fw_list = self._reshape_signals(raw_json)
-        return score_vendor(
+        result = score_vendor(
             vendor_name=vendor,
             evidence=per_dim,
             extracted_text=policy_text,
             framework_evidence=fw_list,
         )
+        return PrivacyAssessment(result=result, sources=list(self._fetch_meta))

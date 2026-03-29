@@ -76,7 +76,15 @@ def _bar(score: int, total: int = 5) -> str:
 _W = 64  # report width
 
 
-def _print_report(result: AssessmentResult, *, verbose: bool = False) -> None:
+def _fmt_signal(slug: str) -> str:
+    """Turn 'd1_purposes_stated' → 'purposes stated'."""
+    parts = slug.split("_", 1)
+    return parts[1].replace("_", " ") if len(parts) == 2 else slug.replace("_", " ")
+
+
+def _print_report(assessment, *, verbose: bool = False) -> None:
+    result = assessment.result
+    sources = assessment.sources
     tier_col = _TIER_COLOUR.get(result.risk_tier, "")
 
     print()
@@ -90,6 +98,17 @@ def _print_report(result: AssessmentResult, *, verbose: bool = False) -> None:
     print(f"  Rubric : v{result.version}")
     print("━" * _W)
 
+    # Sources
+    print(f"\n{_c('PAGES ANALYSED  (' + str(len(sources)) + ')', _BOLD)}")
+    print("─" * _W)
+    if sources:
+        for i, src in enumerate(sources, 1):
+            via_note = _c(f"  [{src.via}]", _DIM)
+            print(f"  {i}.  {src.url}")
+            print(_c(f"       {src.chars:,} chars retrieved{via_note}", _DIM))
+    else:
+        print(_c("  No sources recorded.", _DIM))
+
     # Dimension scores
     print(f"\n{_c('DIMENSION SCORES', _BOLD)}")
     print("─" * _W)
@@ -97,38 +116,47 @@ def _print_report(result: AssessmentResult, *, verbose: bool = False) -> None:
         bar = _bar(dr.capped_score)
         cap = ""
         if dr.cap_reasons:
-            cap = _c(f"  [{dr.cap_reasons[0]}]", _DIM)
+            cap = _c(f"  ↓ {dr.cap_reasons[0]}", _DIM)
         weight = f"×{dr.weight:.1f}" if dr.weight != 1.0 else "    "
         print(
-            f"  {dim_key} {weight}  {dr.name:<34}"
+            f"\n  {dim_key} {weight}  {_c(dr.name, _BOLD)}"
             f"  {bar} {dr.capped_score}/5  {dr.level_label}{cap}"
         )
-        if verbose and dr.missing_for_next:
-            missing = dr.missing_for_next
-            shown = ", ".join(missing[:3])
-            if len(missing) > 3:
-                shown += f" (+{len(missing) - 3} more)"
-            print(_c(f"         ↑ Next level needs: {shown}", _DIM))
+        if dr.matched_signals:
+            found = ", ".join(_fmt_signal(s) for s in dr.matched_signals)
+            print(_c(f"    ✓  Found : {found}", _GREEN))
+        else:
+            print(_c(f"    ✗  Nothing found for this dimension", _DIM))
+        if dr.missing_for_next:
+            missing = [_fmt_signal(s) for s in dr.missing_for_next]
+            shown = ", ".join(missing[:4])
+            if len(missing) > 4:
+                shown += f" (+{len(missing) - 4} more)"
+            next_level = dr.capped_score + 1
+            print(_c(f"    ↑  To reach {next_level}/5 : {shown}", _DIM))
+        if dr.cap_reasons and verbose:
+            for reason in dr.cap_reasons:
+                print(_c(f"    ⬇  Capped : {reason}", _YELLOW))
 
     # Red flags
     if result.red_flags:
-        print(f"\n{_c('RED FLAGS  (' + str(len(result.red_flags)) + ')', _BOLD)}")
+        print(f"\n\n{_c('RED FLAGS  (' + str(len(result.red_flags)) + ')', _BOLD)}")
         print("─" * _W)
         for rf in result.red_flags:
             dims = ", ".join(rf["dims"])
-            match_text = textwrap.shorten(rf["match"], width=54, placeholder="…")
-            print(_c(f'  ⚠  [{dims}]  {rf["label"]}', _YELLOW))
-            print(_c(f'       "{match_text}"', _DIM))
+            match_text = textwrap.shorten(rf["match"], width=58, placeholder="…")
+            print(_c(f'\n  ⚠  [{dims}]  {rf["label"]}', _YELLOW))
+            print(_c(f'       Matched text: "{match_text}"', _DIM))
 
     # Framework certifications
     if result.framework_evidence:
-        print(f"\n{_c('FRAMEWORKS DETECTED', _BOLD)}")
+        print(f"\n\n{_c('FRAMEWORKS DETECTED', _BOLD)}")
         print("─" * _W)
         for fw in result.framework_evidence:
             print(f"  ✓  {fw}")
 
     # Action guidance by tier
-    print(f"\n{_c('RECOMMENDED ACTIONS', _BOLD)}")
+    print(f"\n\n{_c('RECOMMENDED ACTIONS', _BOLD)}")
     print("─" * _W)
     tier = result.risk_tier
     if tier == "HIGH":
@@ -171,15 +199,20 @@ def _cmd_assess(args: argparse.Namespace) -> int:
     print(f"Assessing {vendor!r} …", file=sys.stderr)
 
     try:
-        result = bandit.assess(vendor)
+        assessment = bandit.assess(vendor)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
     if args.json:
-        print(json.dumps(result_to_dict(result), indent=2))
+        output = result_to_dict(assessment.result)
+        output["sources"] = [
+            {"url": s.url, "chars": s.chars, "via": s.via}
+            for s in assessment.sources
+        ]
+        print(json.dumps(output, indent=2))
     else:
-        _print_report(result, verbose=args.verbose)
+        _print_report(assessment, verbose=args.verbose)
 
     return 0
 
