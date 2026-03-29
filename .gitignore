@@ -56,6 +56,7 @@ Thumbs.db
 *.bak
 output/
 exports/
+reports/
 reports/local/
 
 # Python (if using scripts)
