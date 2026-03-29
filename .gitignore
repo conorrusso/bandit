@@ -10,6 +10,7 @@ credentials.json
 .env
 .env.*
 config.env
+bandit.config.yml
 !.env.example
 
 # Secrets

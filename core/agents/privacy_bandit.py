@@ -202,11 +202,22 @@ class PrivacyBandit(BaseBandit):
         # ── Phase 3: Deterministic scoring ───────────────────────────
         self._progress("Phase 3/3  Scoring against rubric…")
         per_dim, fw_list = self._reshape_signals(raw_json)
+
+        from core.config import get_profile_label, get_weights, load_config
+        config = load_config()
+        profile_weights = get_weights(config) if config else None
+        auto_escalate_triggers = (config or {}).get("auto_escalate") or []
+
         result = score_vendor(
             vendor_name=vendor,
             evidence=per_dim,
             extracted_text=policy_text,
             framework_evidence=fw_list,
+            profile_weights=profile_weights,
+            auto_escalate_triggers=auto_escalate_triggers,
         )
+
+        if config:
+            result.active_profile = get_profile_label(config)
 
         return PrivacyAssessment(result=result, sources=list(self._fetch_meta))

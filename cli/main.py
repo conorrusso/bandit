@@ -121,6 +121,14 @@ def assess(
         )
         sys.exit(1)
 
+    # Show active profile if configured
+    from core.config import get_profile_label, load_config
+    _config = load_config()
+    if _config:
+        _label = get_profile_label(_config)
+        if _label:
+            console.print(f"  [color(245)]Profile:[/] [color(220)]{_label}[/]")
+
     vendor_str = " ".join(vendor)
     provider = AnthropicProvider(model=model, api_key=api_key)
 
@@ -157,6 +165,13 @@ def assess(
         write_html_report(report_path, assessment)
         console.print(
             f"\n  [color(243)]Report saved →[/] [color(172)]{report_path}[/]"
+        )
+
+    # Tip when no profile configured
+    if not _config:
+        console.print(
+            "\n  [color(245)]Tip: run [color(220)]bandit setup[/][color(245)] to tailor scores"
+            " to your industry and regulatory profile.[/]"
         )
 
 
@@ -267,6 +282,47 @@ def rubric(dim: str | None) -> None:
             title="[bold color(172)]RISK TIER THRESHOLDS[/]",
             border_style="color(238)",
         ))
+
+
+# ─────────────────────────────────────────────────────────────────────
+# setup
+# ─────────────────────────────────────────────────────────────────────
+
+@main.command()
+@click.option("--reset", is_flag=True, help="Overwrite existing config and start fresh")
+@click.option("--show",  is_flag=True, help="Print current config summary and exit")
+def setup(reset: bool, show: bool) -> None:
+    """Configure your industry and regulatory profile.
+
+    Runs an 18-question wizard that calculates dimension weights based
+    on your regulatory environment and data risk profile. Saves to
+    ./bandit.config.yml.
+
+    \b
+    Examples:
+      bandit setup
+      bandit setup --reset
+      bandit setup --show
+    """
+    from rich.console import Console
+    from cli.setup import run_wizard, show_config
+
+    con = Console()
+
+    if show:
+        show_config(con)
+        return
+
+    if reset:
+        import pathlib
+        from core.config import CONFIG_PATHS
+        for p in CONFIG_PATHS:
+            if p.is_file():
+                p.unlink()
+                con.print(f"  [color(245)]Removed existing config: {p}[/]")
+                break
+
+    run_wizard(con, reset=reset)
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -460,6 +460,13 @@ def _team_summary(result, assessment) -> str:
     }
     action, a_color, detail = _GRC_DECISION.get(result.risk_tier, ("Review", "#8B5A2B", ""))
 
+    # Auto-escalation overrides the normal GRC decision
+    if getattr(result, "escalation_required", False):
+        action = "ESCALATE"
+        a_color = "#8B1A1A"
+        esc_reasons = getattr(result, "escalation_reasons", [])
+        detail = " · ".join(esc_reasons) if esc_reasons else "Auto-escalation triggered."
+
     high_dims     = [k for k, dr in result.dimensions.items() if dr.capped_score <= 2]
     def_dims      = [k for k, dr in result.dimensions.items() if dr.capped_score == 3]
     total_gaps    = sum(len(_all_gaps(k, dr)) for k, dr in result.dimensions.items())
@@ -470,11 +477,20 @@ def _team_summary(result, assessment) -> str:
         style = f' style="color:{vc};font-weight:700"' if vc else ""
         return f'<div class="tp-row"><span class="tp-k">{_h(k)}</span><span class="tp-v"{style}>{v}</span></div>'
 
+    esc_row = ""
+    if getattr(result, "escalation_required", False):
+        esc_list = "".join(
+            f'<div style="color:#8B1A1A;font-size:11px;padding:1px 0">⚠ {_h(r)}</div>'
+            for r in getattr(result, "escalation_reasons", [])
+        )
+        esc_row = f'<div class="tp-row"><span class="tp-k">Escalation reasons</span><span class="tp-v">{esc_list}</span></div>'
+
     grc = f"""<div class="tp">
   <div class="tp-hdr" style="background:#4A2E1A">FOR GRC</div>
   <div class="tp-body">
     {row("Decision", _h(action), a_color)}
     {row("Detail", _h(detail))}
+    {esc_row}
     {row("Risk tier", f'{result.risk_tier}  {result.weighted_average}/5.0', a_color)}
     {row("High-risk dims (≤2)", _h(", ".join(high_dims)) if high_dims else "None")}
     {row("Deficient dims (3)", _h(", ".join(def_dims)) if def_dims else "None")}
@@ -649,6 +665,35 @@ def write_html_report(
         if result.framework_evidence else '<p class="none-p">None detected.</p>'
     )
 
+    # ── Escalation banner ─────────────────────────────────────────────
+    escalation_banner = ""
+    if getattr(result, "escalation_required", False):
+        reasons_html = "".join(
+            f"<li>{_h(r)}</li>" for r in getattr(result, "escalation_reasons", [])
+        )
+        escalation_banner = (
+            '<div class="esc-banner">'
+            '<div class="esc-title">⚠ ESCALATION REQUIRED</div>'
+            '<div class="esc-detail">This vendor requires DPO / security review before proceeding.</div>'
+            f'<ul class="esc-reasons">{reasons_html}</ul>'
+            '</div>'
+        )
+
+    # ── Profile line ──────────────────────────────────────────────────
+    profile_line = ""
+    active_profile = getattr(result, "active_profile", None)
+    if active_profile:
+        weight_notes = [
+            f"{k} ×{dr.weight:.1f}"
+            for k, dr in result.dimensions.items()
+            if abs(dr.weight - RUBRIC[k]["weight"]) > 0.001
+        ]
+        wt_str = (
+            f'<div class="prof-wt">{" · ".join(weight_notes)}</div>'
+            if weight_notes else ""
+        )
+        profile_line = f'<div class="prof-line">Profile: {_h(active_profile)}</div>{wt_str}'
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -770,6 +815,19 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 .email-body pre{{white-space:pre-wrap;font-size:12px;line-height:1.75;
   color:var(--ink);background:var(--cr)}}
 
+/* ── Escalation banner ── */
+.esc-banner{{background:#3D0000;border:2px solid #8B1A1A;border-radius:5px;
+  padding:18px 22px;margin-bottom:28px}}
+.esc-title{{font-size:14px;font-weight:700;color:#FF6B6B;letter-spacing:.04em;margin-bottom:6px}}
+.esc-detail{{font-size:12px;color:#F4C5C5;margin-bottom:10px}}
+.esc-reasons{{list-style:none;padding:0;margin:0}}
+.esc-reasons li{{font-size:12px;color:#F4C5C5;padding:2px 0}}
+.esc-reasons li::before{{content:"⚠  ";color:#FF6B6B}}
+
+/* ── Profile line ── */
+.prof-line{{font-size:11px;color:var(--br);margin-top:4px}}
+.prof-wt{{font-size:10px;color:var(--mu);margin-top:2px;letter-spacing:.02em}}
+
 /* ── Footer ── */
 .footer{{margin-top:56px;padding-top:14px;border-top:1px solid var(--bd);
   font-size:11px;color:var(--mu);display:flex;justify-content:space-between;
@@ -785,10 +843,13 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 </head>
 <body>
 
+{escalation_banner}
+
 <div class="hdr">
   <div>
     <div class="brand">Bandit · Privacy Risk Assessment</div>
     <div class="vn">{_h(result.vendor)}</div>
+    {profile_line}
     <div class="meta">Assessed: {_h(ts)}&nbsp;·&nbsp;Rubric v{_h(result.version)}</div>
   </div>
   <div style="text-align:right">

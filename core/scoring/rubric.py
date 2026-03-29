@@ -1035,6 +1035,9 @@ class AssessmentResult:
     risk_tier: str
     red_flags: list[dict[str, Any]]
     framework_evidence: list[str]
+    escalation_required: bool = False
+    escalation_reasons: list[str] = field(default_factory=list)
+    active_profile: str | None = None
 
 
 def _score_dimension(
@@ -1072,6 +1075,8 @@ def score_vendor(
     evidence: dict[str, dict[str, bool]],
     extracted_text: str = "",
     framework_evidence: list[str] | None = None,
+    profile_weights: dict[str, float] | None = None,
+    auto_escalate_triggers: list[dict] | None = None,
 ) -> AssessmentResult:
     """Run the full deterministic scoring pipeline.
 
@@ -1086,6 +1091,14 @@ def score_vendor(
     framework_evidence:
         List of framework keys from ``FRAMEWORK_MODIFIERS``, e.g.
         ``["soc2_type2_privacy_tsc"]``.
+    profile_weights:
+        Per-dimension weight overrides from a loaded profile.  Replaces
+        the rubric defaults for the weighted-average calculation and is
+        stored on each ``DimensionResult``.
+    auto_escalate_triggers:
+        List of trigger dicts from config ``auto_escalate`` list.
+        Checked after scoring; sets ``escalation_required`` and
+        ``escalation_reasons`` on the returned result.
     """
     framework_evidence = framework_evidence or []
 
@@ -1139,25 +1152,67 @@ def score_vendor(
         # Re-derive label if capping changed the effective level
         if capped != raw_score:
             label = RUBRIC[dim_key]["levels"][capped]["label"]
+        # Profile weight — override rubric default if provided
+        rubric_weight = RUBRIC[dim_key]["weight"]
+        applied_weight = rubric_weight
+        dim_cap_reasons = list(cap_reasons[dim_key])
+        if profile_weights:
+            pw = profile_weights.get(dim_key)
+            if pw is not None:
+                applied_weight = pw
+                if abs(pw - rubric_weight) > 0.001:
+                    dim_cap_reasons.append(f"{dim_key} weight ×{pw:.1f} — profile")
         dim_results[dim_key] = DimensionResult(
             dimension=dim_key,
             name=RUBRIC[dim_key]["name"],
             raw_score=raw_score,
             capped_score=capped,
             level_label=label,
-            weight=RUBRIC[dim_key]["weight"],
-            cap_reasons=cap_reasons[dim_key],
+            weight=applied_weight,
+            cap_reasons=dim_cap_reasons,
             matched_signals=matched,
             missing_for_next=missing,
         )
 
-    # 7. Weighted average
-    total_weight = sum(RUBRIC[k]["weight"] for k in RUBRIC)
-    weighted_sum = sum(
-        dim_results[k].capped_score * RUBRIC[k]["weight"] for k in RUBRIC
-    )
+    # 7. Weighted average (uses profile weights when provided)
+    if profile_weights:
+        total_weight = sum(profile_weights.get(k, RUBRIC[k]["weight"]) for k in RUBRIC)
+        weighted_sum = sum(
+            dim_results[k].capped_score * profile_weights.get(k, RUBRIC[k]["weight"]) for k in RUBRIC
+        )
+    else:
+        total_weight = sum(RUBRIC[k]["weight"] for k in RUBRIC)
+        weighted_sum = sum(
+            dim_results[k].capped_score * RUBRIC[k]["weight"] for k in RUBRIC
+        )
     weighted_avg = round(weighted_sum / total_weight, 1)
     risk = classify_risk(weighted_avg)
+
+    # 8. Auto-escalation check
+    escalation_required = False
+    escalation_reasons: list[str] = []
+    for trigger in (auto_escalate_triggers or []):
+        t_type = trigger.get("type")
+        if t_type == "tier":
+            if risk == trigger.get("tier"):
+                escalation_reasons.append(trigger.get("label", f"Risk tier is {risk}"))
+        elif t_type == "score_below":
+            dim = trigger.get("dimension")
+            threshold = int(trigger.get("threshold", 2))
+            if dim and dim in dim_results and dim_results[dim].capped_score < threshold:
+                escalation_reasons.append(trigger.get("label", f"{dim} score below {threshold}"))
+        elif t_type == "red_flag":
+            flag_label = (trigger.get("flag_label") or "").lower()
+            for rf in rf_hits:
+                if flag_label in rf["label"].lower():
+                    escalation_reasons.append(trigger.get("label", rf["label"]))
+                    break
+        elif t_type == "weighted_average_below":
+            threshold = float(trigger.get("threshold", 2.5))
+            if weighted_avg < threshold:
+                escalation_reasons.append(trigger.get("label", f"Weighted average {weighted_avg} < {threshold}"))
+    if escalation_reasons:
+        escalation_required = True
 
     return AssessmentResult(
         version=__version__,
@@ -1167,6 +1222,8 @@ def score_vendor(
         risk_tier=risk,
         red_flags=rf_hits,
         framework_evidence=framework_evidence,
+        escalation_required=escalation_required,
+        escalation_reasons=escalation_reasons,
     )
 
 
@@ -1177,6 +1234,9 @@ def result_to_dict(result: AssessmentResult) -> dict[str, Any]:
         "vendor": result.vendor,
         "weighted_average": result.weighted_average,
         "risk_tier": result.risk_tier,
+        "escalation_required": result.escalation_required,
+        "escalation_reasons": result.escalation_reasons,
+        "active_profile": result.active_profile,
         "framework_evidence": result.framework_evidence,
         "red_flags": result.red_flags,
         "dimensions": {
