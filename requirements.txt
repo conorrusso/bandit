@@ -11,3 +11,4 @@
 #   (implement core/llm/<provider>.py following the BaseLLMProvider interface)
 
 anthropic>=0.40.0
+rich>=13.0.0

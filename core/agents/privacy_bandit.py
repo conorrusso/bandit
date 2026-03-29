@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Callable
 
 from core.agents.base_bandit import BaseBandit
 from core.llm.base import BaseLLMProvider
@@ -138,10 +139,19 @@ def _start_url(vendor: str) -> str:
 class PrivacyBandit(BaseBandit):
     """Assess a vendor's privacy practices against the 8-dimension rubric."""
 
-    def __init__(self, provider: BaseLLMProvider) -> None:
+    def __init__(
+        self,
+        provider: BaseLLMProvider,
+        on_progress: Callable[[str], None] | None = None,
+    ) -> None:
         super().__init__(provider)
         self._fetched_pages: dict[str, str] = {}   # url → clean text
         self._fetch_meta: list[FetchedSource] = []  # ordered fetch log
+        self._on_progress = on_progress
+
+    def _progress(self, msg: str) -> None:
+        if self._on_progress:
+            self._on_progress(msg)
 
     # ── Tool implementation ───────────────────────────────────────────
 
@@ -240,6 +250,7 @@ class PrivacyBandit(BaseBandit):
         url = _start_url(vendor)
 
         # ── Phase 1: Discovery + fetch ────────────────────────────────
+        self._progress(f"Phase 1/3  Discovering privacy policy for {vendor}…")
         messages = [
             {
                 "role": "user",
@@ -263,6 +274,7 @@ class PrivacyBandit(BaseBandit):
             )
 
         # ── Phase 2: Signal extraction ────────────────────────────────
+        self._progress(f"Phase 2/3  Extracting evidence signals from {len(self._fetch_meta)} page(s)…")
         extraction_prompt = build_extraction_prompt(vendor, policy_text)
         raw_json = self.provider.complete_json(
             prompt=extraction_prompt,
@@ -270,6 +282,7 @@ class PrivacyBandit(BaseBandit):
         )
 
         # ── Phase 3: Deterministic scoring ───────────────────────────
+        self._progress("Phase 3/3  Scoring against rubric…")
         per_dim, fw_list = self._reshape_signals(raw_json)
         result = score_vendor(
             vendor_name=vendor,
