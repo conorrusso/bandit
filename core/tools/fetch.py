@@ -11,12 +11,14 @@ Both paths cap reads at _MAX_BYTES to prevent OOM on large pages.
 """
 from __future__ import annotations
 
+import re
 import urllib.error
 import urllib.request
 
 _TIMEOUT = 25  # seconds
 _MAX_BYTES = 800_000  # ~800 KB — enough for any privacy policy
 _JINA_BASE = "https://r.jina.ai/"
+_MIN_TEXT_CHARS = 800  # below this → page is probably a JS-rendered shell
 
 _HEADERS = {
     "User-Agent": (
@@ -30,10 +32,17 @@ _HEADERS = {
 }
 
 
-def fetch_url(url: str) -> tuple[str, str]:
+def fetch_url(url: str, min_text_chars: int = _MIN_TEXT_CHARS) -> tuple[str, str]:
     """Fetch a URL and return (content, source).
 
     source is "direct" or "jina".
+
+    Falls back to Jina Reader if:
+    - The direct fetch raises an exception (network error, 4xx/5xx), OR
+    - The direct fetch succeeds but the stripped-tag text is below
+      min_text_chars — indicating a JS-rendered shell.
+
+    Caller can pass min_text_chars=0 to skip the threshold check.
 
     Raises
     ------
@@ -41,9 +50,20 @@ def fetch_url(url: str) -> tuple[str, str]:
         If both the direct fetch and the Jina fallback fail.
     """
     try:
-        return _fetch_direct(url), "direct"
+        raw = _fetch_direct(url)
+        if _text_length(raw) >= min_text_chars:
+            return raw, "direct"
+        # Page loaded but sparse text — JS-rendered, fall through to Jina
     except Exception:
-        return _fetch_jina(url), "jina"
+        pass
+    return _fetch_jina(url), "jina"
+
+
+def _text_length(html: str) -> int:
+    """Quick estimate of readable text chars — strips HTML tags with regex."""
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text)
+    return len(text.strip())
 
 
 def _fetch_direct(url: str) -> str:

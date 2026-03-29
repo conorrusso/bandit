@@ -40,30 +40,36 @@ from core.tools.parse import html_to_text
 _SYSTEM = """\
 You are Privacy Bandit, an expert privacy compliance analyst.
 
-Your task: find and retrieve the complete text of the vendor's privacy
-policy and, if available, their Data Processing Agreement (DPA) or
-Data Processing Addendum.
+Your task: retrieve the FULL TEXT of the vendor's privacy policy and,
+if available, their Data Processing Agreement (DPA) or Data Processing
+Addendum. These are the documents needed to score the vendor.
 
 Instructions:
-1. Start by fetching the vendor's main domain or the URL provided.
-2. If the page is a navigation/landing page, look for links to the privacy
-   policy and fetch them.
-3. Fetch the DPA/data processing addendum if you find a link to it.
-4. Stop when you have the full policy text (aim for at least 800 words of
-   actual policy content, not navigation or cookie banners).
-5. Do not fetch more than 8 pages total.
-6. Common privacy policy URL patterns:
-     /privacy, /privacy-policy, /privacy-notice,
-     /legal/privacy, /policies/privacy, /terms/privacy
+1. Start by fetching the starting URL provided.
+2. If that page is a landing/overview page (short, mostly links), find and
+   fetch the FULL privacy statement/policy linked from it — not the overview.
+3. Also fetch the DPA / Data Processing Addendum / Data Processing Agreement
+   if you find a link to one. This is critical for D8 scoring.
+4. Prioritise pages with "full", "statement", "addendum", "DPA", or
+   "processing" in the URL or page title.
+5. Stop when you have substantive policy text (2,000+ words of actual
+   policy/legal content, not navigation).
+6. Do not fetch more than 8 pages total.
 
-When you have retrieved sufficient content, end your final message with:
+Common patterns:
+  Privacy policy: /privacy, /privacy-policy, /privacy-statement,
+                  /legal/privacy, /policies/privacy
+  DPA:            /dpa, /data-processing-addendum, /legal/dpa,
+                  /company/privacy/full_privacy, /gdpr
+
+When done, end with:
 <policy_retrieved>
-URL(s) of the policy pages you found.
+List the URL(s) you fetched.
 </policy_retrieved>
 
-If you cannot find the privacy policy after reasonable attempts, end with:
+If you cannot find the policy after reasonable attempts, end with:
 <policy_not_found>
-Reason why.
+Reason.
 </policy_not_found>
 """
 
@@ -121,13 +127,34 @@ class PrivacyBandit(BaseBandit):
 
     # ── Tool implementation ───────────────────────────────────────────
 
+    # Minimum chars of parsed text before we consider a page usable.
+    # Pages below this threshold are JS-rendered shells — retry via Jina.
+    _MIN_PARSED_CHARS = 500
+
     def _fetch(self, url: str) -> str:
-        """Fetch, parse, cache, and return clean text for a URL."""
+        """Fetch, parse, cache, and return clean text for a URL.
+
+        If the parsed text is below _MIN_PARSED_CHARS (JS-rendered shell),
+        retries via Jina Reader which renders JavaScript before returning.
+        """
         if url in self._fetched_pages:
             preview = self._fetched_pages[url][:300]
             return f"[already fetched — preview]\n{preview}…"
+
         raw, source = fetch_url(url)
         text = html_to_text(raw)
+
+        # JS-rendered shell check: if direct fetch gave almost nothing, try Jina
+        if len(text) < self._MIN_PARSED_CHARS and source == "direct":
+            try:
+                from core.tools.fetch import _fetch_jina
+                raw2 = _fetch_jina(url)
+                text2 = html_to_text(raw2)
+                if len(text2) > len(text):
+                    text, source = text2, "jina"
+            except Exception:
+                pass
+
         self._fetched_pages[url] = text
         return f"[fetched via {source} — {len(text):,} chars]\n\n{text[:40_000]}"
 

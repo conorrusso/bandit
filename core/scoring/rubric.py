@@ -1273,7 +1273,7 @@ Signal definitions:
   are TRUE.
 
 DOCUMENT TEXT:
-{policy_text[:20000]}"""
+{policy_text[:60000]}"""
 
 
 # ─────────────────────────────────────────────────────────────────────
