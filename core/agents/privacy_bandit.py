@@ -215,6 +215,7 @@ class PrivacyBandit(BaseBandit):
             framework_evidence=fw_list,
             profile_weights=profile_weights,
             auto_escalate_triggers=auto_escalate_triggers,
+            assessment_scope="public_policy_only",
         )
 
         if config:

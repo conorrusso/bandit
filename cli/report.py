@@ -362,6 +362,32 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict]) -> str:
     color = _SCORE_COLOR[min(score, 5)]
     wt_badge = f' <span style="color:#8B5A2B;font-size:10px">×{dr.weight:.1f}</span>' if dr.weight != 1.0 else ""
 
+    # ── Excluded dimension (e.g. D8 when public_policy_only) ──────────
+    if getattr(dr, "is_excluded", False):
+        absent_type = getattr(dr, "absent_type", None)
+        if absent_type == "requires_dpa":
+            body = (
+                '<div class="excl-body">'
+                'Cannot be assessed from a public privacy policy.<br>'
+                'Upload the vendor DPA to assess this dimension.<br>'
+                f'<span class="excl-cmd">bandit assess "{_h(dr.name)}" --dpa path/to/dpa.pdf</span>'
+                '</div>'
+            )
+        else:
+            body = '<div class="excl-body">This dimension was excluded from scoring.</div>'
+        return f"""
+<details class="dim-det dim-excl">
+  <summary class="dim-sum">
+    <span class="dk-lbl">{_h(dim_key)}{wt_badge}</span>
+    <span class="dn-lbl">{_h(dr.name)}</span>
+    <span class="bar-cell" style="color:#999;font-size:11px">○ N/A</span>
+    <span class="ds-lbl" style="color:#999">N/A</span>
+    <span class="dl-lbl" style="color:#999">Requires DPA</span>
+    <span class="arr">▶</span>
+  </summary>
+  {body}
+</details>"""
+
     # ── Evidence found ────────────────────────────────────────────────
     ev_items = "".join(
         f'<li class="ev-y">✓&nbsp; {_h(_label(s))}</li>'
@@ -429,6 +455,16 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict]) -> str:
 
     bar = _bar_html(score, color, width=72)
 
+    # ── Partially assessed note ───────────────────────────────────────
+    pa_html = ""
+    if getattr(dr, "partially_assessed", False):
+        pa_html = (
+            '<div class="pa-note">'
+            '◐ Partially assessed from public privacy policy. '
+            'Upload the vendor DPA for complete scoring.'
+            '</div>'
+        )
+
     return f"""
 <details class="dim-det">
   <summary class="dim-sum">
@@ -441,7 +477,7 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict]) -> str:
   </summary>
   <div class="dim-body">
     <div class="dim-grid">
-      <div>{ev_html}{gap_html}</div>
+      <div>{ev_html}{gap_html}{pa_html}</div>
       <div>{rf_html}{q_html}{cr_html}</div>
     </div>
   </div>
@@ -679,6 +715,25 @@ def write_html_report(
             '</div>'
         )
 
+    # ── Scope bar ─────────────────────────────────────────────────────
+    scope_bar = ""
+    scope = getattr(result, "assessment_scope", "public_policy_only")
+    if scope == "public_policy_only":
+        excluded = [k for k, dr in result.dimensions.items() if getattr(dr, "is_excluded", False)]
+        partial  = [k for k, dr in result.dimensions.items() if getattr(dr, "partially_assessed", False)]
+        parts = ['<span>Assessed: Public privacy policy</span>']
+        if excluded:
+            parts.append(
+                f'<span class="sep">·</span>'
+                f'<span class="scope-excl">○ {", ".join(excluded)} excluded — requires DPA</span>'
+            )
+        if partial:
+            parts.append(
+                f'<span class="sep">·</span>'
+                f'<span class="scope-part">◐ {", ".join(partial)} partially assessed — DPA would complete</span>'
+            )
+        scope_bar = f'<div class="scope-bar">{"".join(parts)}</div>'
+
     # ── Profile line ──────────────────────────────────────────────────
     profile_line = ""
     active_profile = getattr(result, "active_profile", None)
@@ -824,6 +879,25 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 .esc-reasons li{{font-size:12px;color:#F4C5C5;padding:2px 0}}
 .esc-reasons li::before{{content:"⚠  ";color:#FF6B6B}}
 
+/* ── Scope bar ── */
+.scope-bar{{font-size:11px;color:var(--mu);margin-bottom:20px;padding:8px 12px;
+  background:rgba(139,90,43,.05);border-radius:3px;border:1px solid var(--bd);
+  line-height:1.8}}
+.scope-excl{{color:#8B6A3A;font-weight:700}}
+.scope-part{{color:#8B6A3A}}
+
+/* ── Excluded dimension ── */
+.dim-excl{{background:rgba(0,0,0,.02);border-color:var(--bd)}}
+.dim-excl .dim-sum{{background:none;opacity:.7}}
+.excl-body{{padding:16px 18px;font-size:12px;color:var(--mu);line-height:1.8}}
+.excl-cmd{{background:var(--cr);border:1px solid var(--bd);border-radius:3px;
+  padding:6px 10px;font-family:'Courier New',monospace;font-size:12px;
+  color:var(--br);display:inline-block;margin-top:6px}}
+
+/* ── Partially assessed note ── */
+.pa-note{{margin-top:12px;padding:7px 10px;background:rgba(139,90,43,.06);
+  border-radius:3px;border-left:3px solid #C8901C;font-size:11px;color:#7A5500}}
+
 /* ── Profile line ── */
 .prof-line{{font-size:11px;color:var(--br);margin-top:4px}}
 .prof-wt{{font-size:10px;color:var(--mu);margin-top:2px;letter-spacing:.02em}}
@@ -859,6 +933,7 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 </div>
 
 {stats_html}
+{scope_bar}
 
 <h2>Dimension Scores</h2>
 {dims_html}

@@ -156,6 +156,23 @@ def print_assessment(assessment, *, verbose: bool = False) -> None:
     for dim_key, dr in result.dimensions.items():
         wt = f" [dim]×{dr.weight:.1f}[/]" if dr.weight != 1.0 else "     "
 
+        # Excluded dimension (e.g. D8 when public_policy_only)
+        if getattr(dr, "is_excluded", False):
+            cell = Text()
+            cell.append(dr.name + "\n", style="color(245)")
+            cell.append("  Cannot be assessed from public privacy policy\n", style="dim color(238)")
+            label_cell = Text()
+            label_cell.append("Requires DPA", style="color(238)")
+            label_cell.append("\n  ○ Upload DPA for full scoring", style="dim color(238)")
+            dim_table.add_row(
+                f"[bold color(238)]{dim_key}[/]{wt}",
+                cell,
+                Text("○", style="color(238)"),
+                "[color(238)]N/A[/]",
+                label_cell,
+            )
+            continue
+
         # Name + signals as a stacked cell
         cell = Text()
         cell.append(dr.name + "\n", style="color(245)")
@@ -183,7 +200,12 @@ def print_assessment(assessment, *, verbose: bool = False) -> None:
         col = _SCORE_COLOUR[min(dr.capped_score, 5)]
         label_cell.append(dr.level_label, style=col)
         for reason in dr.cap_reasons:
+            # Skip the profile weight note — shown in the dim key column
+            if "weight" in reason and "profile" in reason:
+                continue
             label_cell.append(f"\n  ↓ {reason}", style="dim color(238)")
+        if getattr(dr, "partially_assessed", False):
+            label_cell.append("\n  ◐ DPA would complete", style="dim color(238)")
 
         dim_table.add_row(
             f"[bold color(172)]{dim_key}[/]{wt}",
@@ -255,5 +277,22 @@ def print_assessment(assessment, *, verbose: bool = False) -> None:
         title=f"[{_TIER_STYLE.get(result.risk_tier, 'bold')}]RECOMMENDED ACTIONS — {result.risk_tier}[/]",
         border_style=_TIER_BORDER.get(result.risk_tier, "color(238)"),
     ))
+
+    # ── Scope note ───────────────────────────────────────────────────
+    scope = getattr(result, "assessment_scope", "public_policy_only")
+    if scope == "public_policy_only":
+        excluded = [k for k, dr in result.dimensions.items() if getattr(dr, "is_excluded", False)]
+        partial  = [k for k, dr in result.dimensions.items() if getattr(dr, "partially_assessed", False)]
+        scope_text = Text()
+        scope_text.append("  Note: ", style="bold color(245)")
+        scope_text.append("Assessment based on public privacy policy only.\n", style="color(245)")
+        if excluded:
+            scope_text.append(f"  {', '.join(excluded)} excluded", style="color(238)")
+            scope_text.append("  ·  ", style="dim color(238)")
+        if partial:
+            scope_text.append(f"  {', '.join(partial)} partially assessed\n", style="color(238)")
+        scope_text.append("  Upload vendor DPA for complete scoring: ", style="dim color(238)")
+        scope_text.append(f'bandit assess "{result.vendor}" --dpa path/to/dpa.pdf', style="dim color(172)")
+        console.print(scope_text)
 
     console.print()

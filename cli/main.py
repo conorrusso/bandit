@@ -87,6 +87,7 @@ def main(ctx: click.Context) -> None:
 @click.option("--json", "output_json", is_flag=True, help="Print JSON to terminal (report still saved)")
 @click.option("-v", "--verbose", is_flag=True, help="Show discovery stages and extra detail")
 @click.option("--no-report", is_flag=True, help="Skip saving the HTML report")
+@click.option("--dpa", default=None, metavar="PATH", help="Path to vendor DPA document (PDF or text)")
 def assess(
     vendor: tuple,
     model: str,
@@ -94,6 +95,7 @@ def assess(
     output_json: bool,
     verbose: bool,
     no_report: bool,
+    dpa: str | None,
 ) -> None:
     """Assess a vendor's privacy practices.
 
@@ -113,6 +115,13 @@ def assess(
     from core.agents.privacy_bandit import PrivacyBandit
     from core.llm.anthropic import AnthropicProvider
     from core.scoring.rubric import result_to_dict
+
+    if dpa:
+        console.print(
+            "\n  [color(245)]DPA assessment coming soon —[/] "
+            "[color(172)]Google Drive integration will enable document-based scoring.[/]\n"
+        )
+        return
 
     if not api_key:
         console.print(

@@ -966,6 +966,30 @@ RUBRIC: dict[str, dict[str, Any]] = {
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# Assessment scope — what each dimension requires to be fully scored
+# ─────────────────────────────────────────────────────────────────────
+# "both"     — public policy reveals useful signal; DPA supplements
+# "dpa_only" — cannot be meaningfully scored from public policy alone
+
+_ASSESSABLE_FROM: dict[str, str] = {
+    "D1": "both",      # policy covers minimization; DPA supplements
+    "D2": "both",      # policy lists sub-processors; DPA has contractual obligations
+    "D3": "both",      # policy states rights; DPA details the assistance mechanism
+    "D4": "both",      # policy mentions transfer mechanisms; DPA specifies modules/TIA
+    "D5": "both",      # policy mentions breach notification; DPA has the SLA
+    "D6": "both",      # policy discloses AI use and opt-out
+    "D7": "both",      # policy states retention periods; DPA specifies termination process
+    "D8": "dpa_only",  # DPA completeness cannot be assessed from public policy alone
+}
+
+# Dims that are "both" but where the DPA adds significant signal beyond policy
+_PARTIALLY_FROM_POLICY: frozenset[str] = frozenset({"D2", "D4", "D5"})
+
+# Inject assessable_from into each RUBRIC dimension for external access
+for _dk, _af in _ASSESSABLE_FROM.items():
+    RUBRIC[_dk]["assessable_from"] = _af
+
+# ─────────────────────────────────────────────────────────────────────
 # D8 dependency ceiling — D8 quality caps D2, D5, D7
 # ─────────────────────────────────────────────────────────────────────
 # Rationale: a privacy policy promising 24-hr breach notification
@@ -1022,6 +1046,10 @@ class DimensionResult:
     cap_reasons: list[str] = field(default_factory=list)
     matched_signals: list[str] = field(default_factory=list)
     missing_for_next: list[str] = field(default_factory=list)
+    # Scope flags — set when assessment_scope limits what can be assessed
+    is_excluded: bool = False           # True → excluded from weighted average
+    partially_assessed: bool = False    # True → DPA would provide additional signal
+    absent_type: str | None = None      # e.g. "requires_dpa"
 
 
 @dataclass
@@ -1038,6 +1066,7 @@ class AssessmentResult:
     escalation_required: bool = False
     escalation_reasons: list[str] = field(default_factory=list)
     active_profile: str | None = None
+    assessment_scope: str = "public_policy_only"
 
 
 def _score_dimension(
@@ -1077,6 +1106,7 @@ def score_vendor(
     framework_evidence: list[str] | None = None,
     profile_weights: dict[str, float] | None = None,
     auto_escalate_triggers: list[dict] | None = None,
+    assessment_scope: str = "public_policy_only",
 ) -> AssessmentResult:
     """Run the full deterministic scoring pipeline.
 
@@ -1174,16 +1204,26 @@ def score_vendor(
             missing_for_next=missing,
         )
 
-    # 7. Weighted average (uses profile weights when provided)
+    # 6b. Apply assessment scope rules
+    if assessment_scope == "public_policy_only":
+        for dim_key in RUBRIC:
+            if _ASSESSABLE_FROM.get(dim_key) == "dpa_only":
+                dim_results[dim_key].is_excluded = True
+                dim_results[dim_key].absent_type = "requires_dpa"
+            elif dim_key in _PARTIALLY_FROM_POLICY:
+                dim_results[dim_key].partially_assessed = True
+
+    # 7. Weighted average — exclude is_excluded dimensions
+    _included = [k for k in RUBRIC if not dim_results[k].is_excluded]
     if profile_weights:
-        total_weight = sum(profile_weights.get(k, RUBRIC[k]["weight"]) for k in RUBRIC)
+        total_weight = sum(profile_weights.get(k, RUBRIC[k]["weight"]) for k in _included)
         weighted_sum = sum(
-            dim_results[k].capped_score * profile_weights.get(k, RUBRIC[k]["weight"]) for k in RUBRIC
+            dim_results[k].capped_score * profile_weights.get(k, RUBRIC[k]["weight"]) for k in _included
         )
     else:
-        total_weight = sum(RUBRIC[k]["weight"] for k in RUBRIC)
+        total_weight = sum(RUBRIC[k]["weight"] for k in _included)
         weighted_sum = sum(
-            dim_results[k].capped_score * RUBRIC[k]["weight"] for k in RUBRIC
+            dim_results[k].capped_score * RUBRIC[k]["weight"] for k in _included
         )
     weighted_avg = round(weighted_sum / total_weight, 1)
     risk = classify_risk(weighted_avg)
@@ -1224,6 +1264,7 @@ def score_vendor(
         framework_evidence=framework_evidence,
         escalation_required=escalation_required,
         escalation_reasons=escalation_reasons,
+        assessment_scope=assessment_scope,
     )
 
 
@@ -1232,6 +1273,7 @@ def result_to_dict(result: AssessmentResult) -> dict[str, Any]:
     return {
         "rubric_version": result.version,
         "vendor": result.vendor,
+        "assessment_scope": result.assessment_scope,
         "weighted_average": result.weighted_average,
         "risk_tier": result.risk_tier,
         "escalation_required": result.escalation_required,
@@ -1249,6 +1291,9 @@ def result_to_dict(result: AssessmentResult) -> dict[str, Any]:
                 "cap_reasons": v.cap_reasons,
                 "matched_signals": v.matched_signals,
                 "missing_for_next": v.missing_for_next,
+                "is_excluded": v.is_excluded,
+                "partially_assessed": v.partially_assessed,
+                "absent_type": v.absent_type,
             }
             for k, v in result.dimensions.items()
         },
