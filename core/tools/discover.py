@@ -30,6 +30,28 @@ _CACHE_PATH  = pathlib.Path.home() / ".bandit" / "domain-cache.json"
 _REVIEW_PATH = pathlib.Path.home() / ".bandit" / "manual-review.json"
 _CACHE_TTL   = 30  # days
 
+# Hosts/prefixes that must never be fetched (SSRF prevention)
+_BLOCKED_HOSTS = {
+    "localhost", "0.0.0.0",
+    "169.254.169.254",   # AWS/GCP/Azure metadata
+    "metadata.google.internal",
+}
+_BLOCKED_PREFIXES = ("127.", "10.", "192.168.", "172.")  # loopback + RFC-1918
+
+
+def _is_safe_url(url: str) -> bool:
+    """Return False for loopback, private-range, or metadata hosts."""
+    try:
+        host = urllib.parse.urlparse(url).hostname or ""
+        host = host.lower()
+        if host in _BLOCKED_HOSTS:
+            return False
+        if any(host.startswith(p) for p in _BLOCKED_PREFIXES):
+            return False
+        return True
+    except Exception:
+        return False
+
 _TLDS = [".com", ".ai", ".io", ".co", ".app", ".dev", ".org", ".net", ".tech", ".inc"]
 
 _PRIVACY_PATHS = [
@@ -148,13 +170,19 @@ def _load_cache() -> dict:
         return {}
     try:
         return json.loads(_CACHE_PATH.read_text())
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
 def _save_cache(cache: dict) -> None:
-    _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _CACHE_PATH.write_text(json.dumps(cache, indent=2))
+    try:
+        import tempfile
+        _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = pathlib.Path(tempfile.mktemp(dir=_CACHE_PATH.parent, suffix=".tmp"))
+        tmp.write_text(json.dumps(cache, indent=2))
+        tmp.replace(_CACHE_PATH)
+    except OSError:
+        pass
 
 
 def _check_cache(slug: str) -> dict | None:
@@ -195,6 +223,8 @@ def _is_aggregator(url: str) -> bool:
 
 def head_request(url: str, timeout: int = 6) -> int | None:
     """Return the final HTTP status code for a HEAD request, or None on error."""
+    if not _is_safe_url(url):
+        return None
     req = urllib.request.Request(url, method="HEAD", headers=_HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -207,6 +237,8 @@ def head_request(url: str, timeout: int = 6) -> int | None:
 
 def _tiny_get(url: str, max_bytes: int = 4096, timeout: int = 6) -> str | None:
     """Return the first max_bytes of a URL as text, or None on failure."""
+    if not _is_safe_url(url):
+        return None
     req = urllib.request.Request(url, headers=_HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:

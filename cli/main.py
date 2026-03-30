@@ -33,13 +33,14 @@ def _load_history() -> dict:
         if _HISTORY_PATH.exists():
             with open(_HISTORY_PATH) as f:
                 return json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         pass
     return {}
 
 
 def _save_history(slug: str, risk_tier: str, weighted_average: float) -> None:
     import datetime
+    import tempfile
     history = _load_history()
     history[slug] = {
         "last_assessed": datetime.date.today().isoformat(),
@@ -48,9 +49,10 @@ def _save_history(slug: str, risk_tier: str, weighted_average: float) -> None:
     }
     try:
         _HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_HISTORY_PATH, "w") as f:
-            json.dump(history, f, indent=2)
-    except Exception:
+        tmp = pathlib.Path(tempfile.mktemp(dir=_HISTORY_PATH.parent, suffix=".tmp"))
+        tmp.write_text(json.dumps(history, indent=2))
+        tmp.replace(_HISTORY_PATH)
+    except OSError:
         pass
 
 

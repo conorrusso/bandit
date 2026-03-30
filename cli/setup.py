@@ -28,11 +28,13 @@ PROGRESS_PATH = pathlib.Path.home() / ".bandit" / ".setup_progress.json"
 
 
 def _save_progress(answers: dict, last_q: int) -> None:
-    """Write current answers and last completed question to temp file."""
+    """Write current answers and last completed question to temp file (atomic)."""
     try:
+        import tempfile
         PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(PROGRESS_PATH, "w") as f:
-            json.dump({"last_completed_question": last_q, "answers": answers}, f, indent=2)
+        tmp = pathlib.Path(tempfile.mktemp(dir=PROGRESS_PATH.parent, suffix=".tmp"))
+        tmp.write_text(json.dumps({"last_completed_question": last_q, "answers": answers}, indent=2))
+        tmp.replace(PROGRESS_PATH)
     except OSError:
         pass  # Never crash on progress save failure
 
