@@ -59,6 +59,7 @@ def show_welcome(console: Console | None = None) -> None:
         return t
 
     commands = [
+        (_cmd("bandit setup",  ""),                   "Configure your profile (run this first)"),
         (_cmd("bandit assess", "<vendor>"),           "Run a full privacy risk assessment"),
         (_cmd("bandit assess", "<vendor>", "-v"),     "Verbose — see fetched pages and signals"),
         (_cmd("bandit assess", "<vendor>", "--json"), "Output raw JSON"),
@@ -129,9 +130,10 @@ def show_welcome(console: Console | None = None) -> None:
     # ── Cursor prompt ────────────────────────────────────────────────
     console.print()
     prompt = Text()
-    prompt.append("  Run ", style="color(245)")
+    prompt.append("  New? Run ", style="color(245)")
+    prompt.append("bandit setup", style="color(220)")
+    prompt.append("  ·  Then ", style="color(245)")
     prompt.append("bandit assess <vendor>", style="color(220)")
-    prompt.append(" to get started", style="color(245)")
     prompt.append("▋", style="blink bold color(172)")
     console.print(prompt)
     console.print()

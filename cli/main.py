@@ -162,13 +162,40 @@ def assess(
         )
         sys.exit(1)
 
-    # Show active profile if configured
+    # Show active profile — or prompt first-time setup
     from core.config import get_profile_label, load_config
     _config = load_config()
     if _config:
         _label = get_profile_label(_config)
         if _label:
             console.print(f"  [color(245)]Profile:[/] [color(220)]{_label}[/]")
+    else:
+        console.print()
+        console.print(
+            "  [bold color(220)]No profile configured.[/]  "
+            "[color(245)]Bandit will use default weights.[/]"
+        )
+        console.print(
+            "  [color(245)]Run [color(220)]bandit setup[/][color(245)] first to tailor scoring "
+            "to your industry and regulatory context.[/]"
+        )
+        console.print()
+        console.print("  [color(245)]s)[/]  Run setup now (recommended)")
+        console.print("  [color(245)]a)[/]  Assess anyway with default weights")
+        console.print("  [color(245)]q)[/]  Quit")
+        console.print()
+        _choice = console.input(
+            "  [color(220)]Choice[/] [color(245)](default s):[/] "
+        ).strip().lower()
+        if _choice == "q":
+            sys.exit(0)
+        elif _choice == "a":
+            console.print()
+        else:
+            from cli.setup import run_wizard
+            run_wizard(console)
+            _config = load_config()
+            console.print()
 
     vendor_str = " ".join(vendor)
 

@@ -10,6 +10,14 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## 2026-03-29 (evening)
+
+### Changed — `(this commit)`
+- **First-run setup prompt**: `bandit assess` with no config now prompts before starting — `s) Run setup now (recommended)` · `a) Assess anyway` · `q) Quit`. Default is `s`. Choosing setup runs the wizard inline, then continues into the assessment. Previously the tip appeared after the assessment had already run with default weights.
+- **Welcome screen**: `bandit setup` added as the first entry in the COMMANDS panel with the label `Configure your profile (run this first)`. Cursor prompt updated to `New? Run bandit setup · Then bandit assess <vendor>`.
+
+---
+
 ## 2026-03-29
 
 ### Security — `53e54e6`
