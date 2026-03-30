@@ -42,7 +42,7 @@ bandit setup
 bandit assess "Salesforce"
 ```
 
-`bandit setup` takes about 2 minutes and adjusts dimension weights for your industry, regulatory context, and data risk profile. If you skip it, Bandit uses GDPR-focused defaults and shows a reminder after each run.
+`bandit setup` takes about 5 minutes and adjusts dimension weights for your industry, regulatory context, and data risk profile. If you run `bandit assess` without a config, Bandit will prompt you to run setup before starting — you can set up inline or skip and assess with default weights.
 
 ---
 
@@ -140,7 +140,7 @@ Based on your answers, Bandit automatically adjusts:
 - Contract recommendations citing relevant frameworks
 - Team routing in reports
 
-If no config exists, Bandit uses default weights and shows a tip to run setup after each assessment.
+If no config exists, Bandit prompts you to run setup before the assessment starts. You can set up inline, skip it, or quit.
 
 ### bandit batch
 

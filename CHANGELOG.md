@@ -12,9 +12,16 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ## 2026-03-29 (evening)
 
-### Changed — `(this commit)`
+### Changed — `3f93763`
 - **First-run setup prompt**: `bandit assess` with no config now prompts before starting — `s) Run setup now (recommended)` · `a) Assess anyway` · `q) Quit`. Default is `s`. Choosing setup runs the wizard inline, then continues into the assessment. Previously the tip appeared after the assessment had already run with default weights.
 - **Welcome screen**: `bandit setup` added as the first entry in the COMMANDS panel with the label `Configure your profile (run this first)`. Cursor prompt updated to `New? Run bandit setup · Then bandit assess <vendor>`.
+
+### Changed — `0ac0f43`
+- `docs/cli-reference.md`: added quick-reference table at the top; added `--force` flag to `bandit assess`; updated setup question count 18 → 26; updated section 6 description; added `vendor-history.json` and `.setup_progress.json` to cache/config files table.
+
+### Docs — `(this commit)`
+- `docs/setup-guide.md`: fully rewritten to reflect the current 26-question wizard. Section 6 now documents Q17a/b/c (HIGH), Q18a/b/c (MEDIUM), Q19a/b/c (LOW), and Q26 (maturity). Config YAML example updated to current schema with `reassessment:` block. Valid values table corrected (removed obsolete `reassess_days`, added `reassessment[tier].depth/days/triggers`).
+- `README.md`: updated setup description from "2 minutes / 18 questions / shows a tip after" to "5 minutes / prompts before assess starts / inline setup option".
 
 ---
 

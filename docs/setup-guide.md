@@ -1,6 +1,6 @@
 # Bandit Setup Guide
 
-`bandit setup` runs a short wizard that tailors Bandit to your organisation's specific regulatory context. This guide explains what it does and how to get the most out of it.
+`bandit setup` runs a wizard that tailors Bandit to your organisation's specific regulatory context. This guide explains what it does and how to get the most out of it.
 
 ---
 
@@ -26,7 +26,9 @@ The rubric logic doesn't change. The weights change. Same signals, different emp
 bandit setup
 ```
 
-Takes about 2 minutes. The wizard asks 18 questions across 6 sections, shows you a weight preview, and writes `bandit.config.yml` in the current directory.
+Takes about 5 minutes. The wizard asks 26 questions across 6 sections, shows you a weight preview and reassessment schedule, and writes `bandit.config.yml` in the current directory.
+
+If you run `bandit assess` without a config, Bandit will prompt you to run setup before starting — you can set up inline or skip it and assess with default weights.
 
 Run it once. Update it with `bandit setup --reset` when your regulatory context changes.
 
@@ -36,122 +38,152 @@ To see your current profile without re-running the wizard:
 bandit setup --show
 ```
 
+Progress is saved after every question. If setup is interrupted (Ctrl+C or crash), running `bandit setup` again will offer to resume from where you left off.
+
 ---
 
 ## Question by question
 
-### Section 1 — Company location
+### Section 1 — Where you operate
 
 **Q1: Where is your company headquartered?**
 
-Options: EU/EEA, UK, US, Canada, APAC, Other.
+Options: US, EU/EEA, UK, Canada, APAC, Other.
 
-If you select EU/EEA or UK: D4 (transfer mechanisms) weight increases by +1.0 and D3 (data subject rights) by +0.5. This reflects that EU/UK organisations face direct regulatory liability for cross-border transfer compliance.
+If you select EU/EEA or UK: D4 (transfer mechanisms) weight increases by +1.0, D3 (data subject rights) by +0.5, and D8 (DPA) by +0.5. This reflects that EU/UK organisations face direct regulatory liability for cross-border transfer compliance.
 
 **Q2: Where are your customers located?**
 
 Multi-select. If you include EU/EEA or UK customers: same weight adjustments as Q1 (if not already applied). This catches US companies with EU customer bases who are in scope for GDPR as controllers.
 
-**Q3: Where is your data processed and stored?**
+**Q3: Where is your infrastructure hosted?**
 
 Multi-select. If you select EU + US (cross-border): D4 weight increases by an additional +0.5 on top of any Q1/Q2 adjustment. Cross-border transfers are a distinct enforcement risk from simply having EU customers.
 
 ---
 
-### Section 2 — Industry
+### Section 2 — Your industry
 
-**Q4: What is your primary industry?**
+**Q4: Which industry best describes your company?**
 
-Options: Technology/SaaS, Healthcare/Life Sciences, Financial Services, Retail/E-commerce, Education, Legal/Professional Services, Government/Public Sector, Other.
+Options: Technology, Healthcare, Financial Services, Education, Retail / E-commerce, Government / Public sector, Professional Services, Other.
 
 Healthcare → D5 (breach) +1.0, D1 (minimization) +0.5, D3 (rights) +0.5
 Financial Services → D7 (retention) +0.5, D5 +0.5, D8 (DPA) +0.5
 
 ---
 
-### Section 3 — Data types
+### Section 3 — Your data
 
-**Q5: Do you process Protected Health Information (PHI)?**
+**Q5: Do any vendors handle Protected Health Information (PHI)?**
 
 If yes: D5 (breach) +1.0, D1 (minimization) +0.5, D3 (rights) +0.5, D8 (DPA) +0.5. PHI triggers HIPAA breach notification requirements with a 60-day timeline (stricter than GDPR's 72 hours to the authority).
 
-**Q6: Do you process Payment Card Industry data (PCI)?**
+**Q6: Do any vendors handle payment card data (PCI)?**
 
 If yes: D7 (retention) +0.5, D8 (DPA) +0.5, D5 (breach) +0.5. PCI-DSS has specific cardholder data deletion and breach notification requirements.
 
-**Q7: Do you process data about children (under 13/16)?**
+**Q7: Do any vendors process children's data?**
 
 If yes: D1 (minimization) +0.5, D3 (rights) +0.5. COPPA and GDPR Art. 8 set higher standards for lawful basis and parental consent.
 
-**Q8: Do you process special categories of personal data?**
+**Q8: Do any vendors process special-category data?**
 
-Special categories include health, biometric, genetic, racial/ethnic origin, religious beliefs, political opinions, sexual orientation, trade union membership, criminal records.
+Special categories include race, ethnic origin, health, biometric, religious, political, and sexual orientation data.
 
 If yes: D1 (minimization) +0.5, D3 (rights) +0.5, D6 (AI/ML) +0.5. Special categories under GDPR Art. 9 require explicit consent or a specific Art. 9(2) exception — the bar is higher.
 
-**Q9: Do you primarily assess AI/ML vendors?**
+**Q9: Do you onboard AI/ML vendors that may train on your data?**
 
 If yes: D6 (AI/ML usage) +0.5 across all assessments. EU AI Act and FTC disgorgement precedent make AI training clauses a priority risk.
 
-**Q10: Roughly how many vendor assessments per year?**
+**Q10: Approximately how many vendors will you assess per month?**
 
-Informational only. Used to calibrate the escalation threshold recommendations in Section 5.
+Informational only. Used to calibrate recommendation language.
 
 ---
 
-### Section 4 — Regulatory frameworks
+### Section 4 — Regulatory obligations
 
-**Q11: Which regulatory frameworks apply to your organisation?**
+**Q11: Which regulations apply to your organisation?**
 
-Multi-select: GDPR, UK GDPR, HIPAA/HITECH, CCPA/CPRA, PCI-DSS, SOX, PIPEDA, Other.
+Multi-select: GDPR, CCPA/CPRA, HIPAA, PCI DSS, UK GDPR, LGPD, PIPL, Other.
 
-This is used to inform contract recommendation language in reports. A HIPAA-scoped company sees HIPAA BAA language in D5 contract recommendations; a CCPA company sees CPRA service provider provisions in D8.
+Used to inform contract recommendation language in reports. A HIPAA-scoped company sees HIPAA BAA language in D5 recommendations; a CCPA company sees CPRA service provider provisions in D8.
 
-**Q12: Do you have a DPO or privacy lead?**
+**Q12: Does your organisation have a designated DPO?**
 
-If yes: Bandit assumes a higher maturity baseline and adjusts the re-assess cycle recommendation accordingly.
+If yes: Bandit assumes a higher maturity baseline and adjusts recommendation language accordingly.
 
 ---
 
 ### Section 5 — Risk appetite
 
-**Q13: What is your organisation's risk appetite?**
+**Q13: What is your organisation's risk appetite for vendor privacy risk?**
 
-Options: Conservative (flag everything), Balanced (flag material risks), Permissive (flag critical risks only).
+Options: Conservative (lower thresholds — escalate early), Moderate (follow risk tier), Liberal (escalate only on HIGH).
 
-Conservative → lower escalation thresholds
-Permissive → higher thresholds, fewer escalations
+**Q14: At what risk tier should auto-escalation trigger?**
 
-**Q14: At what risk tier do you want automatic escalation?**
-
-Options: HIGH only, HIGH or MEDIUM, Never.
+Options: HIGH tier only, HIGH or MEDIUM tier, Never (manual review only).
 
 If you select HIGH only: an `auto_escalate` trigger is added for `tier: HIGH`.
 If you select HIGH or MEDIUM: triggers are added for both tiers.
 
-**Q15: Escalate if a vendor has no AI training opt-out?**
+**Q15: Should AI training red flags trigger escalation regardless of overall score?**
 
-If yes: adds an `auto_escalate` trigger for `red_flag: ai_training_no_opt_out`. Any vendor with this red flag is escalated regardless of their overall tier.
+If yes: any detection of AI training bundled under generic "improvement" language triggers escalation regardless of the vendor's overall tier.
 
 ---
 
-### Section 6 — Team routing
+### Section 6 — Team context & reassessment
 
-**Q16: Who reviews assessments?**
+**Q16: Who typically reviews vendor assessments?**
 
-Options: GRC only, GRC + Legal, GRC + Legal + Security, Full team.
+Options: GRC team, Legal / Privacy counsel, Security team, DPO, Individual / ad hoc, Shared responsibility.
 
-Determines which team panels appear in the report.
+---
 
-**Q17: How often should vendors be re-assessed?**
+#### HIGH risk vendors
 
-Options: 90 days (quarterly), 180 days (semi-annual), 365 days (annual), 730 days (biennial).
+**Q17a: Assessment depth for HIGH risk vendors?**
 
-Stored as a number of days. The re-assess date in the GRC panel is calculated from this value.
+| Option | What it runs |
+|--------|-------------|
+| Full assessment | All 8 dimensions scored |
+| Lightweight | D1, D6, D7 only |
+| Privacy policy scan | Red flags only, no scoring |
+| No automated assessment | Skip — manual review only |
 
-**Q18: What is your privacy programme maturity?**
+Default: Full assessment.
 
-Options: Early stage, Developing, Established, Advanced.
+**Q17b: How often do you reassess HIGH risk vendors?**
+
+Preset options: every 6 months, every year (default), every 18 months, every 2 years, on policy change only, one time only. Or enter any custom number of days.
+
+**Q17c: What triggers an out-of-cycle reassessment for HIGH risk vendors?**
+
+Multi-select with defaults shown. Options: Policy change detected, Vendor breach reported, Regulatory change affecting this vendor, Contract renewal, Manual trigger only.
+
+Defaults: Policy change, Vendor breach, Regulatory change.
+
+---
+
+#### MEDIUM risk vendors
+
+**Q18a–Q18c:** Same three questions as HIGH. Default depth: Full. Default cadence: every 2 years. Default triggers: Policy change, Vendor breach.
+
+---
+
+#### LOW risk vendors
+
+**Q19a–Q19c:** Same three questions. Default depth: Privacy policy scan. Default cadence: one time only. Default triggers: Vendor breach.
+
+---
+
+**Q26: What describes your current vendor assessment maturity?**
+
+Options: Just starting, Have a process, Mature programme.
 
 Used to calibrate recommendation language — early-stage teams get more prescriptive guidance; advanced teams get more concise output.
 
@@ -181,32 +213,64 @@ Example — EU healthcare company processing PHI with a conservative risk appeti
 
 ```yaml
 profile:
+  name: EU Healthcare
+  industry: Healthcare
   hq_region: EU/EEA
   customer_regions:
     - EU/EEA
     - US
-  industry: Healthcare/Life Sciences
-  processes_phi: true
-  processes_pci: false
-  processes_children_data: false
-  processes_special_categories: true
-  assesses_ai_vendors: false
-  regulatory_frameworks:
+  infra_regions:
+    - EU/EEA
+    - US
+  regulations:
     - GDPR
-    - HIPAA/HITECH
-  has_dpo: true
-  risk_appetite: Conservative
-  escalation_tier: HIGH only
-  escalate_ai_no_opt_out: true
-  review_team: GRC + Legal + Security
-  reassess_days: 90
-  maturity: Established
+    - HIPAA
+  risk_appetite: conservative
+  dpo_present: true
+  phi_in_scope: true
+  pci_in_scope: false
+  childrens_data: false
+  special_categories: true
+  ai_vendors: false
+  review_team: GRC team
+  maturity: mature programme
+  weights:
+    D1: 2.0
+    D2: 1.0
+    D3: 2.5
+    D4: 2.0
+    D5: 3.0
+    D6: 1.5
+    D7: 1.0
+    D8: 2.0
+
+reassessment:
+  high:
+    depth: full
+    days: 365
+    triggers:
+      - policy_change
+      - breach_reported
+      - regulatory_change
+  medium:
+    depth: full
+    days: 730
+    triggers:
+      - policy_change
+      - breach_reported
+  low:
+    depth: scan
+    days: 0
+    triggers:
+      - breach_reported
 
 auto_escalate:
   - type: tier
-    value: HIGH
+    tier: HIGH
+    label: Vendor risk tier is HIGH — requires DPO / security review
   - type: red_flag
-    value: ai_training_no_opt_out
+    flag_label: AI training
+    label: AI training on customer data detected with no opt-out mechanism
 ```
 
 Valid values:
@@ -214,11 +278,13 @@ Valid values:
 | Key | Valid values |
 |-----|-------------|
 | `hq_region` | `EU/EEA`, `UK`, `US`, `Canada`, `APAC`, `Other` |
-| `industry` | `Technology/SaaS`, `Healthcare/Life Sciences`, `Financial Services`, `Retail/E-commerce`, `Education`, `Legal/Professional Services`, `Government/Public Sector`, `Other` |
-| `risk_appetite` | `Conservative`, `Balanced`, `Permissive` |
-| `reassess_days` | `90`, `180`, `365`, `730` |
-| `maturity` | `Early stage`, `Developing`, `Established`, `Advanced` |
+| `industry` | `Technology`, `Healthcare`, `Financial Services`, `Education`, `Retail / E-commerce`, `Government / Public sector`, `Professional Services`, `Other` |
+| `risk_appetite` | `conservative`, `moderate`, `liberal` |
+| `reassessment[tier].depth` | `full`, `lightweight`, `scan`, `none` |
+| `reassessment[tier].days` | Any positive integer, or `0` for one-time / on-change only |
+| `reassessment[tier].triggers` | `policy_change`, `breach_reported`, `regulatory_change`, `contract_renewal` |
 | `auto_escalate[].type` | `tier`, `score_below`, `red_flag`, `weighted_average_below` |
+| `maturity` | `just starting`, `have a process`, `mature programme` |
 
 ---
 
@@ -227,11 +293,3 @@ Valid values:
 Some vendors need different settings than your global config — for example, a healthcare vendor assessed by a technology company that doesn't normally process PHI.
 
 Per-vendor flag overrides are planned for v1.1. For now, the simplest approach is to run `bandit setup --reset` before assessing the vendor, then reset back after.
-
-Alternatively, pass the full URL directly to skip discovery and use a temporary config:
-
-```bash
-BANDIT_CONFIG=./healthcare.config.yml bandit assess "Epic Systems"
-```
-
-(`BANDIT_CONFIG` env var support coming in v1.1)
