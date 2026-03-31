@@ -429,13 +429,6 @@ Each Bandit is a specialised agent with its own tool belt:
 
 ---
 
-## Legacy n8n workflows
-
-The original Bandit workflows built on n8n are preserved in [/legacy](legacy/).
-They are fully functional if you prefer a visual, no-code approach.
-
----
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). The most impactful contributions:
