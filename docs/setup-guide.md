@@ -270,3 +270,45 @@ Valid values:
 `bandit setup --advanced` is coming soon. It will allow direct per-dimension weight editing, custom cadence values, and team routing configuration without re-running the full wizard.
 
 For now, power users can edit `bandit.config.yml` directly — it takes effect immediately on the next `bandit assess` run.
+
+---
+
+## Google Drive integration (bandit setup --drive)
+
+Run this after completing the main setup wizard if you want to use Google Drive for document storage.
+
+```bash
+bandit setup --drive
+```
+
+This walks you through:
+1. Pointing Bandit to your Google credentials file
+2. Authenticating with Google (browser opens once)
+3. Configuring your Drive root folder ID
+
+Full instructions: [docs/google-drive-setup.md](google-drive-setup.md)
+
+After Drive is configured, every `bandit assess --drive` and `bandit batch --drive` command automatically discovers and reads documents from Drive.
+
+---
+
+## What setup configures
+
+After completing `bandit setup`, your `bandit.config.yml` contains everything Bandit needs to run context-aware assessments:
+
+**Organisation profile:**
+- Industry, locations, data types → dimension weights
+- Frameworks → what regulations to cite in reports
+- Certifications → what documents to expect per vendor
+
+**Risk appetite:**
+- Approach (Strict/Standard/Pragmatic) → cadence defaults
+- Auto-escalation triggers → when to flag regardless of score
+
+**Reassessment schedule:**
+- Per risk tier — depth and frequency
+- HIGH vendors assessed more often and more thoroughly
+- LOW vendors scanned or skipped based on your approach
+
+**Document expectations:**
+Based on industry and data types, Bandit knows what documents to expect per vendor and flags missing required documents in every report.

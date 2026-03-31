@@ -810,7 +810,7 @@
     <div class="wyg-card">
       <div class="wyg-icon">📁</div>
       <div class="wyg-title">DOCUMENT INTELLIGENCE</div>
-      <p class="wyg-desc">Upload DPAs, MSAs, SOC 2 reports, BAAs and AI policies. Bandit auto-detects document type, extracts relevant signals, and merges findings across all sources. Connect Google Drive for automatic document discovery.</p>
+      <p class="wyg-desc">Upload DPAs, MSAs, SOC 2 reports and AI policies from a local folder or Google Drive. Bandit auto-detects document types, extracts signals, and merges findings across all sources. Every score shows exactly which document provided the evidence.</p>
     </div>
     <div class="wyg-card">
       <div class="wyg-icon">🏢</div>
@@ -932,11 +932,15 @@ cd bandit</div>
     </div>
     <div class="install-step">
       <div class="install-step-label">2 — Install</div>
-      <div class="install-code">pip install -e .</div>
+      <div class="install-code">pip install -e .
+<span style="color:var(--muted);font-size:11px"># With Google Drive support:</span>
+pip install -e ".[drive]"</div>
     </div>
     <div class="install-step">
       <div class="install-step-label">3 — Setup &amp; Assess</div>
-      <div class="install-code">bandit setup &amp;&amp; bandit assess "your-vendor.com"</div>
+      <div class="install-code">bandit setup &amp;&amp; bandit assess "Salesforce"
+<span style="color:var(--muted);font-size:11px"># With Drive documents:</span>
+bandit setup --drive &amp;&amp; bandit assess "Salesforce" --drive</div>
     </div>
   </div>
   <div style="text-align:center;">
@@ -967,10 +971,10 @@ cd bandit</div>
       <div class="roadmap-version">v1.1</div>
       <div class="roadmap-name">Document Sources</div>
       <ul class="roadmap-features">
-        <li>Google Drive integration</li>
-        <li>Local folder support</li>
-        <li>PDF/DOCX parsing</li>
-        <li>Full D8 DPA scoring</li>
+        <li>Local folder + Google Drive</li>
+        <li>DPA, MSA, SOC 2, BAA, AI policies</li>
+        <li>Full D8 scoring</li>
+        <li>Signal source attribution</li>
         <li>47 document types</li>
       </ul>
       <span class="badge badge-live">LIVE</span>

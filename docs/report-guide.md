@@ -177,3 +177,87 @@ Use this to verify Bandit found the right policy — if the URL looks wrong, re-
 ```bash
 bandit assess https://vendor.com/correct-privacy-policy
 ```
+
+---
+
+## Documents assessed section
+
+Every report shows exactly what was assessed:
+
+```
+Documents assessed:
+✓ Privacy policy    https://salesforce.com/privacy
+✓ DPA               dpa.pdf (24 pages)
+✓ SOC 2 Type II     soc2-2025.pdf (142 pages)
+✓ Sub-processor list sub-processors.pdf
+✗ MSA               not provided
+✗ BAA               not applicable (no PHI in profile)
+```
+
+Status meanings:
+- **✓ Assessed** — document was read and signals extracted
+- **✗ Not provided** — document not in the docs folder
+- **— Not applicable** — not relevant for this vendor profile
+
+Required documents that are missing show in red with a note recommending you request them from the vendor before proceeding to contract.
+
+---
+
+## Signal source attribution
+
+In each expanded dimension section, every piece of evidence shows which document it came from:
+
+```
+Evidence found:
+✓ Breach notification SLA: 48 hours
+  Source: dpa.pdf §8.2 Breach Notification
+
+✓ Sub-processor list available (23 processors)
+  Source: sub-processors.pdf
+
+✓ AI training opt-out available
+  Source: privacy-policy (salesforce.com/privacy)
+```
+
+This is important for the Legal team — they need to know whether a commitment came from the public policy (not contractually binding) or the DPA (contractually binding and enforceable).
+
+A commitment in a DPA is worth significantly more than the same commitment in a privacy policy. Bandit shows both and distinguishes them.
+
+---
+
+## How signal merging works
+
+When multiple documents are assessed, Bandit merges signals from all sources into a unified evidence set.
+
+The merging logic:
+- If a signal appears only in one document → use it
+- If multiple documents confirm the same signal → keep
+- If a document provides a stronger commitment than the policy → upgrade to the stronger version
+- If documents contradict each other → flag both, use the stronger commitment, note the contradiction
+
+**Example:** privacy policy says "we will notify you of breaches promptly" (vague). DPA says "within 48 hours" (specific). The DPA commitment wins. D5 scores based on the 48-hour SLA not the vague policy language. The report shows both and notes the DPA as the source.
+
+---
+
+## D8 DPA Completeness — public policy vs DPA
+
+**Without a DPA:**
+
+D8 shows as "Requires DPA" — not scored. Excluded from weighted average. The For Legal section recommends requesting a DPA before contract signature.
+
+**With a DPA:**
+
+D8 is fully scored against the GDPR Art. 28(3)(a)-(h) checklist. Each provision is checked:
+
+| Provision | What is checked |
+|-----------|----------------|
+| Art. 28(3)(a) | Processing only on controller instructions |
+| Art. 28(3)(b) | Confidentiality obligations on personnel |
+| Art. 28(3)(c) | Security measures (specific vs generic language) |
+| Art. 28(3)(d) | Sub-processor approval requirement and flow-down |
+| Art. 28(3)(e) | Data subject rights assistance committed |
+| Art. 28(3)(f) | DPIA and prior consultation assistance |
+| Art. 28(3)(g) | Deletion or return of data on termination |
+| Art. 28(3)(h) | Audit rights and inspection access |
+
+Missing provisions appear as gaps with specific redline language in the For Legal section.

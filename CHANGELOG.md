@@ -10,6 +10,72 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## [1.1.0] — 2026-03-30
+
+### Added
+
+**Document Sources**
+- Local folder support — `bandit assess --docs <path>`
+- Google Drive integration — `bandit assess --drive`
+- `bandit setup --drive` wizard for Drive configuration
+- `--docs-root` flag for batch mode auto-matching
+- `--drive` flag for batch mode Drive documents
+
+**Document Pipeline**
+- PDF text extraction via pdfplumber
+- Word document extraction via python-docx (paragraphs and tables)
+- JSON flattening for model cards
+- Scanned PDF detection with clear error message
+
+**Document Classification**
+- 47 document types with DocumentType enum
+- 3-pass classification: filename → content keywords → AI
+- Confidence scoring per classification
+
+**Type-specific Extraction**
+- Dedicated extraction prompts for all document types
+- DPA: full GDPR Art. 28(3)(a)-(h) checklist
+- BAA: HIPAA §164.504 provisions
+- SOC 2: trust service criteria, exceptions, attestations
+- AI Policy: training data, opt-out, EU AI Act
+- Model Card: training sources, personal data usage
+- And more for all 47 document types
+
+**Multi-document Assessment**
+- Signal merging across public policy and documents
+- Source attribution per signal in HTML report
+- Stronger commitment wins when documents conflict
+- Assessment scope updated (public_policy_only → policy_and_documents)
+
+**D8 Now Fully Assessable**
+- DPA upload enables full Art. 28 scoring
+- D2/D4/D5 upgraded from partial to complete scoring when DPA is provided
+
+**Google Drive**
+- OAuth 2.0 authentication with token refresh
+- Vendor folder auto-discovery by name
+- File download with MIME type filtering
+- Google Docs exported as DOCX automatically
+- Reports saved back to Drive vendor folder
+- `auto_save_reports` config option
+
+**HTML Report**
+- Documents assessed section in report header
+- Signal source attribution per dimension
+- Required documents flagged when missing
+- Assessment scope label updated
+
+**Dependencies**
+- pdfplumber>=0.10.0 (core)
+- python-docx>=1.0.0 (core)
+- pyyaml>=6.0.0 (core)
+- google-auth family (optional `[drive]` extra)
+
+### Fixed
+- Assessment no longer penalises D8 as Absent when no DPA exists — correctly shows Requires DPA
+
+---
+
 ## 2026-03-29 (latest)
 
 ### Added — `(this session)`

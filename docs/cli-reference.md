@@ -316,27 +316,39 @@ Variables can also be set in `config.env` at the repo root. They are loaded auto
 
 ## vendors.txt format
 
-One vendor per line. Names, domains, and URLs can be mixed freely. Lines starting with `#` and blank lines are ignored.
+One vendor per line. Supports up to four columns separated by commas.
+
+| Column | Field | Required |
+|--------|-------|---------|
+| 1 | Vendor name or domain | Yes |
+| 2 | Policy URL (skips URL discovery) | No |
+| 3 | Vendor functions (comma-separated) | No |
+| 4 | Local docs path | No |
+
+**Examples:**
 
 ```
-# SaaS tools
-Salesforce                        ← company name
-hubspot.com                       ← domain
-https://notion.so/privacy         ← full URL
-
-# Infrastructure
-stripe.com
-https://aws.amazon.com/privacy/
-```
-
-**Extended format** — optional columns for functions and docs path:
-
-```
-# vendor, url (optional), functions (optional), docs_path (optional)
-Salesforce,,customer_data,./docs/salesforce/
-NetSuite,,financial_processing,./docs/netsuite/
+# Simplest — just vendor names
+Salesforce
 HubSpot
-stripe.com
+Notion
+
+# With direct URL (skips discovery)
+Anecdotes, https://anecdotes.ai/privacy
+
+# With vendor function profiling
+NetSuite,,financial_processing,hr_people
+
+# With local docs folder
+Salesforce,,,./vendor-docs/salesforce/
+
+# All columns
+Salesforce,https://salesforce.com/privacy,customer_data,./docs/sf/
+
+# Comments and blank lines ignored
+# Healthcare vendors
+Epic,,healthcare_clinical
+Cerner,,healthcare_clinical
 ```
 
 The `docs_path` column (4th) overrides `--docs-root` for that specific vendor.
@@ -391,3 +403,55 @@ Examples:
 | `~/.bandit/.setup_progress.json` | In-progress setup wizard state (deleted on completion) |
 | `./bandit.config.yml` | Setup wizard output — industry and regulatory profile |
 | `~/.bandit/bandit.config.yml` | Fallback config location (searched if `./bandit.config.yml` not found) |
+
+---
+
+## Supported document types
+
+Bandit auto-detects these document types:
+
+**Privacy & Data Protection**
+- Privacy Policy · Cookie Policy · CCPA Notice · Children's Privacy Policy
+
+**Contracts**
+- DPA (Data Processing Agreement)
+- MSA (Master Services Agreement)
+- BAA (Business Associate Agreement — HIPAA)
+- SaaS Agreement · NDA
+- Data Sharing Agreement
+- Joint Controller Agreement (GDPR Art. 26)
+- Standard Contractual Clauses (SCCs)
+- Order Form
+
+**Audit & Certification**
+- SOC 2 Type II · SOC 2 Type I · SOC 1 Type II
+- ISO 27001 · ISO 27701 · ISO 42001
+- HITRUST · PCI AOC · PCI ROC
+- FedRAMP ATO · NIST 800-171 · CMMC
+- NYDFS Part 500 · DORA Compliance
+
+**AI-Specific**
+- AI Policy · Model Card · AI System Card
+- EU AI Act Conformity Documentation
+- Algorithm Impact Assessment
+
+**Transfer & International**
+- Transfer Impact Assessment (TIA)
+- Record of Processing Activities (ROPA entry)
+
+**Security**
+- Penetration Test Summary
+- Vulnerability Disclosure Policy
+- Incident Response Policy
+- Sub-processor List
+- Security Policy
+- Data Retention Schedule
+
+**Healthcare Specific**
+- HIPAA Security Addendum
+
+**Financial Specific**
+- GLBA Privacy Notice · PCI SAQ
+
+**Supported file formats:**
+PDF (`.pdf`) · Word (`.docx` `.doc`) · HTML (`.html` `.htm`) · Text (`.txt` `.md`) · JSON (`.json`)

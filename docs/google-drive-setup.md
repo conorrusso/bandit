@@ -1,0 +1,212 @@
+# Google Drive Setup Guide
+
+Bandit can connect to your Google Drive to automatically discover and read vendor documents — DPAs, MSAs, SOC 2 reports, BAAs, and more.
+
+Once connected, run `bandit assess "Salesforce" --drive` and Bandit finds, downloads, and analyses every document in that vendor's Drive folder automatically. Assessment results are saved back to Drive alongside the source documents.
+
+---
+
+## Before you start
+
+You will need:
+- A Google account with access to Google Drive
+- About 10 minutes for the one-time setup
+- Your vendor documents already in Google Drive (or ready to upload)
+
+---
+
+## Step 1 — Organise your Drive folder
+
+Create this folder structure in Google Drive:
+
+```
+Bandit/                     ← create this root folder
+├── Salesforce/             ← one subfolder per vendor
+│   ├── dpa.pdf
+│   ├── msa.pdf
+│   └── soc2-2025.pdf
+├── HubSpot/
+│   └── dpa.pdf
+└── NetSuite/
+    └── soc1-2025.pdf
+```
+
+Rules:
+- The root folder can be named anything you want
+- Each vendor subfolder must match the vendor name you use in Bandit (case-insensitive)
+- File names don't matter — Bandit auto-detects what each document is
+- Subfolders can contain any mix of document types
+
+---
+
+## Step 2 — Create a Google Cloud project
+
+Bandit needs read-only access to your Drive. This requires a free Google Cloud project.
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Click "Select a project" at the top
+3. Click "New Project"
+4. Name it "Bandit" (or anything you like)
+5. Click "Create"
+
+---
+
+## Step 3 — Enable the Google Drive API
+
+1. In your new project, go to: **APIs & Services → Library**
+2. Search for "Google Drive API"
+3. Click on it and click **Enable**
+
+---
+
+## Step 4 — Create OAuth credentials
+
+1. Go to: **APIs & Services → Credentials**
+2. Click **"Create Credentials" → "OAuth client ID"**
+3. If prompted, configure the consent screen first:
+   - User Type: **External**
+   - App name: Bandit
+   - User support email: your email
+   - Developer contact: your email
+   - Save and continue through all steps
+   - No scopes needed — just save defaults
+   - Add your email as a test user
+4. Back on Create Credentials → OAuth client ID:
+   - Application type: **Desktop app**
+   - Name: Bandit
+   - Click **"Create"**
+5. Click **"Download JSON"**
+6. Save the file somewhere you can find it
+   (e.g. `~/Downloads/bandit-credentials.json`)
+
+---
+
+## Step 5 — Get your Drive folder ID
+
+1. Open Google Drive in your browser
+2. Navigate to your Bandit root folder (the one containing vendor subfolders)
+3. Look at the URL — it will look like:
+   ```
+   drive.google.com/drive/folders/1ABC123xyz...
+   ```
+4. Copy the long ID after `/folders/`
+   That is your folder ID.
+
+---
+
+## Step 6 — Run bandit setup --drive
+
+```bash
+bandit setup --drive
+```
+
+Bandit will ask for:
+
+1. **Path to your credentials JSON file**
+   → paste the path e.g. `~/Downloads/bandit-credentials.json`
+
+2. **Your browser will open automatically**
+   → log in with your Google account
+   → click Allow to grant read-only Drive access
+   → browser tab will confirm success
+
+3. **Your Bandit root folder ID**
+   → paste the ID you copied in Step 5
+
+4. Bandit scans the folder and confirms:
+   ```
+   ✓ Connected to Google Drive
+   ✓ Found 12 vendor subfolders
+   ✓ Configuration saved
+   ```
+
+---
+
+## Step 7 — Run your first Drive assessment
+
+```bash
+bandit assess "Salesforce" --drive
+```
+
+Bandit will:
+1. Find the Salesforce subfolder in your Drive
+2. Download documents to a secure temp directory
+3. Auto-detect each document type
+4. Run the full assessment pipeline
+5. Clean up the temp files
+6. Save the HTML report back to the Salesforce folder in Drive
+
+---
+
+## Usage
+
+Single vendor assessment:
+
+```bash
+bandit assess "Salesforce" --drive
+bandit assess "Salesforce" --drive --verbose
+```
+
+Batch assessment — all vendors with Drive folders:
+
+```bash
+bandit batch vendors.txt --drive
+```
+
+Skip saving report to Drive:
+
+```bash
+bandit assess "Salesforce" --drive --no-report-to-drive
+```
+
+---
+
+## Configuration
+
+Drive settings are stored in `bandit.config.yml`:
+
+```yaml
+integrations:
+  google_drive:
+    enabled: true
+    root_folder_id: "1ABC123xyz..."
+    credentials_path: "~/.bandit/google-credentials.json"
+    auto_save_reports: true
+```
+
+Edit this file directly to change settings.
+Or re-run `bandit setup --drive` to reconfigure.
+
+---
+
+## Troubleshooting
+
+**"Google credentials not found"**
+Run `bandit setup --drive` to complete setup.
+Make sure you pointed to the right credentials.json path.
+
+**"Vendor folder not found in Drive"**
+Check the subfolder name matches the vendor name you're using in Bandit. Matching is case-insensitive but spelling must match exactly.
+Example: folder named "Salesforce" matches `bandit assess "Salesforce"` or `bandit assess "salesforce"`
+
+**"Token expired" or authentication errors**
+Run `bandit setup --drive` again.
+Bandit will refresh your token automatically in most cases.
+
+**Drive documents not improving scores**
+Check the manifest output when running with `--verbose`.
+Make sure documents show as "Ready" not "Failed".
+Scanned PDFs (no text layer) cannot be read — use text-based PDFs instead.
+
+**"Access denied" on Drive folder**
+Make sure the Google account you authenticated with has access to the Drive folder you configured.
+
+---
+
+## Security and privacy
+
+- Bandit requests **read-only** access to Drive
+- Your credentials never leave your machine
+- Documents are downloaded to a temporary directory that is deleted after each assessment
+- Bandit never modifies Drive contents except saving HTML reports back to vendor folders (disable with `auto_save_reports: false` in config)
+- Your API key and Drive token are stored in `~/.bandit/` on your local machine only
