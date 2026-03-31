@@ -246,21 +246,54 @@ def get_profile(config: dict[str, Any] | None = None) -> dict[str, Any] | None:
 
 
 def get_weights(config: dict[str, Any] | None = None) -> dict[str, float]:
-    """Return dimension weights. Falls back to rubric defaults if no config."""
+    """Return dimension weights. Falls back to rubric defaults if no config.
+
+    Supports both new format (``dimension_weights`` top-level key) and
+    old format (``profile.weights``).
+    """
     if config is None:
         config = load_config()
-    weights_raw = ((config or {}).get("profile") or {}).get("weights") or {}
+    cfg = config or {}
+    # New format: top-level dimension_weights
+    weights_raw = cfg.get("dimension_weights") or {}
+    # Old format fallback: profile.weights
+    if not weights_raw:
+        weights_raw = (cfg.get("profile") or {}).get("weights") or {}
     result = dict(_DEFAULT_WEIGHTS)
     result.update({k: float(v) for k, v in weights_raw.items() if k in result})
     return result
 
 
 def get_profile_label(config: dict[str, Any] | None = None) -> str | None:
-    """Return a short human-readable profile label, e.g. 'EU Technology · GDPR · CCPA/CPRA'."""
-    profile = get_profile(config)
+    """Return a short human-readable profile label.
+
+    Supports both new format (``company`` / ``frameworks``) and
+    old format (``profile``).
+    """
+    if config is None:
+        config = load_config()
+    cfg = config or {}
+
+    # New format
+    company = cfg.get("company")
+    if company:
+        org_type = company.get("org_type", "")
+        locations = company.get("locations") or []
+        frameworks = (cfg.get("frameworks") or {}).get("inferred") or []
+        parts: list[str] = []
+        if org_type:
+            parts.append(org_type)
+        if locations:
+            parts.append(", ".join(locations[:2]))
+        for fw in frameworks[:2]:
+            parts.append(fw)
+        return " · ".join(parts) if parts else org_type or None
+
+    # Old format fallback
+    profile = get_profile(cfg)
     if not profile:
         return None
-    parts: list[str] = []
+    parts = []
     hq = profile.get("hq_region", "")
     industry = profile.get("industry", "")
     if industry:
@@ -397,3 +430,104 @@ def calculate_weights(answers: dict[str, Any]) -> dict[str, float]:
         weights[k] = round(max(_WEIGHT_MIN, min(_WEIGHT_MAX, weights[k])), 2)
 
     return weights
+
+
+# ─────────────────────────────────────────────────────────────────────
+# BanditConfig — structured config accessor
+# ─────────────────────────────────────────────────────────────────────
+
+class BanditConfig:
+    """Structured accessor for bandit.config.yml.
+
+    Handles both the new format (company / data_types / frameworks /
+    dimension_weights) and the legacy format (profile.*).
+    """
+
+    DEFAULT_WEIGHTS: dict[str, float] = dict(_DEFAULT_WEIGHTS)
+
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        if config is None:
+            config = load_config()
+        self._cfg: dict[str, Any] = config or {}
+
+    @classmethod
+    def load(cls) -> "BanditConfig":
+        return cls(load_config())
+
+    # ── Weights ───────────────────────────────────────────────────────
+
+    def get_weights(
+        self,
+        vendor_functions: list | None = None,
+    ) -> dict[str, float]:
+        """Return combined dimension weights.
+
+        If vendor_functions is provided, applies per-function modifiers on
+        top of the profile weights, clamped to [0.5, 3.0].
+        """
+        base = get_weights(self._cfg)
+
+        if not vendor_functions:
+            return base
+
+        try:
+            from core.profiles.vendor_functions import get_weight_modifiers
+            mods = get_weight_modifiers(vendor_functions)
+            combined = dict(base)
+            for dim, delta in mods.items():
+                if dim in combined:
+                    combined[dim] = round(
+                        max(_WEIGHT_MIN, min(_WEIGHT_MAX, combined[dim] + delta)), 2
+                    )
+            return combined
+        except ImportError:
+            return base
+
+    # ── Escalation ────────────────────────────────────────────────────
+
+    def get_auto_escalate_triggers(self) -> list[dict]:
+        return self._cfg.get("auto_escalate") or []
+
+    def is_auto_escalate(self, assessment_result: Any) -> tuple[bool, list[str]]:
+        """Check result against configured escalation triggers.
+
+        Returns ``(escalation_required, reasons_list)``.
+        """
+        return is_auto_escalate(assessment_result, self._cfg)
+
+    # ── Reassessment ──────────────────────────────────────────────────
+
+    def get_reassessment(self, risk_tier: str) -> dict:
+        """Return reassessment config for a given risk tier (HIGH/MEDIUM/LOW)."""
+        rc = get_reassessment_config(self._cfg)
+        return rc.get(risk_tier.lower(), rc.get("medium", {}))
+
+    # ── Profile label ─────────────────────────────────────────────────
+
+    def get_label(self) -> str | None:
+        return get_profile_label(self._cfg)
+
+    # ── Frameworks ────────────────────────────────────────────────────
+
+    def get_frameworks(self) -> list[str]:
+        """Return inferred/configured regulatory frameworks."""
+        frameworks_cfg = self._cfg.get("frameworks") or {}
+        inferred = frameworks_cfg.get("inferred") or []
+        if inferred:
+            return inferred
+        # Legacy: regulations list
+        profile = self._cfg.get("profile") or {}
+        return profile.get("regulations") or []
+
+    # ── Document requirements ─────────────────────────────────────────
+
+    def get_required_documents(self) -> list[str]:
+        """Return required vendor documents from config."""
+        return self._cfg.get("document_requirements") or []
+
+    # ── Certifications ────────────────────────────────────────────────
+
+    def get_certifications_required(self) -> list[str]:
+        """Return certifications required from vendors."""
+        frameworks_cfg = self._cfg.get("frameworks") or {}
+        return frameworks_cfg.get("certifications_required") or []

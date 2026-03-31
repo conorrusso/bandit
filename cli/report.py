@@ -357,7 +357,7 @@ def _bar_html(score: int, color: str, width: int = 80) -> str:
 # Dimension section HTML
 # ─────────────────────────────────────────────────────────────────────
 
-def _dim_section(dim_key: str, dr, result_red_flags: list[dict]) -> str:
+def _dim_section(dim_key: str, dr, result_red_flags: list[dict], signal_sources: dict | None = None) -> str:
     score = dr.capped_score
     color = _SCORE_COLOR[min(score, 5)]
     wt_badge = f' <span style="color:#8B5A2B;font-size:10px">×{dr.weight:.1f}</span>' if dr.weight != 1.0 else ""
@@ -369,8 +369,8 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict]) -> str:
             body = (
                 '<div class="excl-body">'
                 'Cannot be assessed from a public privacy policy.<br>'
-                'Upload the vendor DPA to assess this dimension.<br>'
-                f'<span class="excl-cmd">bandit assess "{_h(dr.name)}" --dpa path/to/dpa.pdf</span>'
+                'Provide vendor documents (DPA, MSA, SOC 2) to assess this dimension.<br>'
+                f'<span class="excl-cmd">bandit assess "vendor" --docs ./vendor-docs/</span>'
                 '</div>'
             )
         else:
@@ -389,8 +389,15 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict]) -> str:
 </details>"""
 
     # ── Evidence found ────────────────────────────────────────────────
+    _srcs = signal_sources or {}
     ev_items = "".join(
-        f'<li class="ev-y">✓&nbsp; {_h(_label(s))}</li>'
+        '<li class="ev-y">✓&nbsp; {label}{src}</li>'.format(
+            label=_h(_label(s)),
+            src=(
+                f' <span style="color:#8B5A2B;font-size:10px">← {_h(_srcs[s])}</span>'
+                if s in _srcs else ""
+            ),
+        )
         for s in dr.matched_signals
     )
     ev_html = (
@@ -711,8 +718,9 @@ def write_html_report(
     )
 
     # ── Dimension sections ────────────────────────────────────────────
+    _signal_sources = getattr(result, "signal_sources", {})
     dims_html = "\n".join(
-        _dim_section(k, dr, result.red_flags)
+        _dim_section(k, dr, result.red_flags, signal_sources=_signal_sources)
         for k, dr in result.dimensions.items()
     )
 
@@ -749,10 +757,23 @@ def write_html_report(
     # ── Scope bar ─────────────────────────────────────────────────────
     scope_bar = ""
     scope = getattr(result, "assessment_scope", "public_policy_only")
-    if scope == "public_policy_only":
+    documents_assessed = getattr(result, "documents_assessed", [])
+    if scope == "policy_and_documents" and documents_assessed:
+        doc_count = len(documents_assessed)
+        doc_list = ", ".join(_h(d) for d in documents_assessed[:5])
+        if len(documents_assessed) > 5:
+            doc_list += f" +{len(documents_assessed) - 5} more"
+        scope_bar = (
+            f'<div class="scope-bar">'
+            f'<span>Assessment scope: Privacy policy + {doc_count} document(s)</span>'
+            f'<span class="sep">·</span>'
+            f'<span class="scope-part">📄 {doc_list}</span>'
+            f'</div>'
+        )
+    elif scope == "public_policy_only":
         excluded = [k for k, dr in result.dimensions.items() if getattr(dr, "is_excluded", False)]
         partial  = [k for k, dr in result.dimensions.items() if getattr(dr, "partially_assessed", False)]
-        parts = ['<span>Assessed: Public privacy policy</span>']
+        parts = ['<span>Assessment scope: Public privacy policy only</span>']
         if excluded:
             parts.append(
                 f'<span class="sep">·</span>'

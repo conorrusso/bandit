@@ -2,9 +2,10 @@
 Bandit setup wizard — industry and regulatory context profiles.
 
 Run with:
-  bandit setup           Run full 18-question wizard
-  bandit setup --reset   Start fresh, overwrite existing config
-  bandit setup --show    Print current config summary
+  bandit setup             Run wizard (5 core + up to 3 conditional questions)
+  bandit setup --reset     Start fresh, overwrite existing config
+  bandit setup --show      Print current config summary
+  bandit setup --advanced  Advanced configuration (coming soon)
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ PROGRESS_PATH = pathlib.Path.home() / ".bandit" / ".setup_progress.json"
 
 
 def _save_progress(answers: dict, last_q: int) -> None:
-    """Write current answers and last completed question to temp file (atomic)."""
+    """Write current answers and last completed question (atomic)."""
     try:
         import tempfile
         PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -36,7 +37,7 @@ def _save_progress(answers: dict, last_q: int) -> None:
         tmp.write_text(json.dumps({"last_completed_question": last_q, "answers": answers}, indent=2))
         tmp.replace(PROGRESS_PATH)
     except OSError:
-        pass  # Never crash on progress save failure
+        pass
 
 
 def _load_progress() -> dict | None:
@@ -54,7 +55,6 @@ def _load_progress() -> dict | None:
 
 
 def _clear_progress() -> None:
-    """Delete progress file after successful completion or start-over."""
     try:
         if PROGRESS_PATH.exists():
             PROGRESS_PATH.unlink()
@@ -96,24 +96,37 @@ def _ask_multi(
     options: list[str],
     defaults: list[int] | None = None,
     min_count: int = 1,
+    allow_none: bool = False,
 ) -> list[str]:
-    """Show a numbered list and return a list of selected option strings."""
+    """Show a numbered list and return a list of selected option strings.
+
+    If allow_none is True, pressing Enter with no default returns [].
+    """
     for i, opt in enumerate(options, 1):
         con.print(f"  [color(245)]{i}.[/] {opt}")
-    default_str = ",".join(str(d) for d in (defaults or []))
-    hint = f"(e.g. 1,3 — default {default_str})" if default_str else f"(e.g. 1,3)"
+    if defaults:
+        default_str = ",".join(str(d) for d in defaults)
+        hint = f"(e.g. 1,3 — default {default_str})"
+    elif allow_none:
+        hint = "(e.g. 1,3 — Enter for none)"
+    else:
+        hint = "(e.g. 1,3)"
     while True:
         raw = con.input(
             f"\n  [color(220)]Enter numbers, comma-separated[/] [color(245)]{hint}:[/] "
         ).strip()
-        if not raw and defaults:
-            return [options[d - 1] for d in defaults]
-        try:
-            indices = [int(x.strip()) for x in raw.split(",") if x.strip()]
-            if len(indices) >= min_count and all(1 <= n <= len(options) for n in indices):
-                return [options[n - 1] for n in indices]
-        except ValueError:
-            pass
+        if not raw:
+            if defaults:
+                return [options[d - 1] for d in defaults]
+            if allow_none:
+                return []
+        if raw:
+            try:
+                indices = [int(x.strip()) for x in raw.split(",") if x.strip()]
+                if (allow_none or len(indices) >= min_count) and all(1 <= n <= len(options) for n in indices):
+                    return [options[n - 1] for n in indices]
+            except ValueError:
+                pass
         con.print(f"  [red]Please enter valid numbers between 1 and {len(options)}, comma-separated.[/]")
 
 
@@ -129,89 +142,6 @@ def _ask_bool(con: Console, prompt: str, default: bool = False) -> bool:
         if raw in ("n", "no"):
             return False
         con.print("  [red]Please enter y or n.[/]")
-
-
-def _ask_cadence(
-    con: Console,
-    options: list[tuple[str, int]],
-    default_idx: int = 1,
-) -> int:
-    """Show numbered cadence options. Returns days (0 = no scheduled cadence).
-
-    Accepts:
-    - A number 1–N to select a preset option
-    - A larger integer to use as custom days
-    - Enter to accept the default
-    """
-    n_opts = len(options)
-    for i, (label, _) in enumerate(options, 1):
-        marker = "  [color(245)]← default[/]" if i == default_idx else ""
-        con.print(f"  [color(245)]{i}.[/] {label}{marker}")
-    con.print(f"\n  [color(245)]Or enter a custom number of days (e.g. 900)[/]")
-    default_days = options[default_idx - 1][1]
-    prompt = (
-        f"\n  [color(220)]Enter 1–{n_opts} or day count[/] "
-        f"[color(245)](default {default_idx}):[/] "
-    )
-    while True:
-        raw = con.input(prompt).strip()
-        if not raw:
-            return default_days
-        try:
-            n = int(raw)
-            if 1 <= n <= n_opts:
-                return options[n - 1][1]
-            if n > n_opts:
-                return n  # custom days
-        except ValueError:
-            pass
-        con.print(f"  [red]Enter a number 1–{n_opts} to choose an option, or a day count (e.g. 900).[/]")
-
-
-# Shared trigger options (label, config key)
-_TRIGGER_OPTIONS: list[tuple[str, str]] = [
-    ("Policy change detected",                  "policy_change"),
-    ("Vendor breach reported",                  "breach_reported"),
-    ("Regulatory change affecting this vendor", "regulatory_change"),
-    ("Contract renewal",                        "contract_renewal"),
-    ("Manual trigger only",                     "__manual__"),
-]
-
-
-def _ask_triggers(
-    con: Console,
-    defaults: list[str],
-) -> list[str]:
-    """Show trigger options with ◉/◯ for defaults. Returns selected config keys.
-
-    Selecting 'Manual trigger only' returns an empty list.
-    Pressing Enter accepts defaults.
-    Entering numbers replaces defaults entirely.
-    """
-    for i, (label, key) in enumerate(_TRIGGER_OPTIONS, 1):
-        if key in defaults:
-            con.print(f"  [color(220)]◉ {i}.[/] [color(250)]{label}[/]")
-        else:
-            con.print(f"  [color(245)]◯ {i}.[/] {label}")
-    con.print()
-    raw = con.input(
-        "  [color(220)]Enter numbers to select[/] "
-        "[color(245)](overrides defaults, or Enter to accept ◉):[/] "
-    ).strip()
-    if not raw:
-        return list(defaults)
-    try:
-        idxs = [int(x.strip()) for x in raw.replace(",", " ").split() if x.strip()]
-        selected_keys = [
-            _TRIGGER_OPTIONS[i - 1][1]
-            for i in idxs
-            if 1 <= i <= len(_TRIGGER_OPTIONS)
-        ]
-        if "__manual__" in selected_keys:
-            return []
-        return selected_keys
-    except (ValueError, IndexError):
-        return list(defaults)
 
 
 def _days_label(days: int) -> str:
@@ -233,12 +163,12 @@ def _days_label(days: int) -> str:
     return f"Every ~{round(y, 1):.1g} years".replace(".0", "")
 
 
-def _section_header(con: Console, number: int, title: str, subtitle: str = "") -> None:
+def _section_header(con: Console, number: int, total: int, title: str, subtitle: str = "") -> None:
     con.print()
     con.print(Rule(style="color(238)"))
     con.print()
     t = Text()
-    t.append(f"  Section {number}/6  ", style="bold color(172)")
+    t.append(f"  Q{number}/{total}  ", style="bold color(172)")
     t.append(title, style="bold color(250)")
     if subtitle:
         t.append(f"  — {subtitle}", style="color(245)")
@@ -246,30 +176,310 @@ def _section_header(con: Console, number: int, title: str, subtitle: str = "") -
     con.print()
 
 
-def _section_summary(con: Console, items: list[tuple[str, str]]) -> None:
-    t = Table(box=None, show_header=False, padding=(0, 2))
-    t.add_column(style="color(245)", no_wrap=True, min_width=22)
-    t.add_column(style="color(220)")
-    for k, v in items:
-        t.add_row(k, v)
-    con.print(Panel(t, title="[color(245)]Section summary[/]", border_style="color(238)"))
+# ─────────────────────────────────────────────────────────────────────
+# Inference engine
+# ─────────────────────────────────────────────────────────────────────
+
+_DEFAULT_WEIGHTS: dict[str, float] = {
+    "D1": 1.0, "D2": 1.0, "D3": 1.0, "D4": 1.0,
+    "D5": 1.0, "D6": 1.5, "D7": 1.0, "D8": 1.5,
+}
+_WEIGHT_MIN = 0.5
+_WEIGHT_MAX = 3.0
+
+
+def _infer_frameworks(answers: dict) -> list[str]:
+    """Derive applicable frameworks from wizard answers."""
+    locations: list[str] = answers.get("locations", [])
+    data_types: dict = answers.get("data_types", {})
+    org_type: str = answers.get("org_type", "")
+    frameworks: list[str] = []
+
+    if "European Union / EEA" in locations:
+        frameworks.append("GDPR")
+    if "United Kingdom" in locations:
+        frameworks.append("UK GDPR")
+    if "United States" in locations:
+        frameworks.append("CCPA/CPRA")
+    if data_types.get("phi") or "Healthcare" in org_type:
+        if "HIPAA" not in frameworks:
+            frameworks.append("HIPAA")
+    if data_types.get("pci"):
+        frameworks.append("PCI DSS")
+    if data_types.get("children") and "United States" in locations:
+        frameworks.append("COPPA")
+    if "Canada" in locations:
+        frameworks.append("PIPEDA")
+
+    return frameworks
+
+
+def _infer_weights(answers: dict) -> dict[str, float]:
+    """Derive dimension weights from wizard answers."""
+    locations: list[str] = answers.get("locations", [])
+    data_types: dict = answers.get("data_types", {})
+    org_type: str = answers.get("org_type", "")
+    infra_location: str = answers.get("infra_location", "")
+
+    weights = dict(_DEFAULT_WEIGHTS)
+
+    eu_present = "European Union / EEA" in locations or "United Kingdom" in locations
+
+    if eu_present:
+        weights["D4"] += 1.0
+        weights["D3"] += 0.5
+        weights["D8"] += 0.5
+
+    # Cross-border: EU presence + US infra
+    if eu_present and infra_location in ("us_only", "both"):
+        weights["D4"] += 0.5
+
+    if data_types.get("phi") or "Healthcare" in org_type:
+        weights["D5"] += 1.0
+        weights["D1"] += 0.5
+        weights["D3"] += 0.5
+        weights["D8"] += 0.5
+
+    if data_types.get("pci"):
+        weights["D7"] += 0.5
+        weights["D8"] += 0.5
+        weights["D5"] += 0.5
+
+    if data_types.get("children"):
+        weights["D1"] += 0.5
+        weights["D3"] += 0.5
+
+    if data_types.get("biometric") or data_types.get("special_categories"):
+        weights["D1"] += 0.5
+        weights["D3"] += 0.5
+        weights["D6"] += 0.5
+
+    if data_types.get("hr_data"):
+        weights["D1"] += 0.3
+        weights["D3"] += 0.3
+
+    if "Financial" in org_type:
+        weights["D7"] += 0.5
+        weights["D5"] += 0.5
+
+    for k in weights:
+        weights[k] = round(max(_WEIGHT_MIN, min(_WEIGHT_MAX, weights[k])), 2)
+
+    return weights
+
+
+def _infer_reassessment(risk_approach: str) -> dict:
+    """Derive per-tier reassessment config from risk approach."""
+    if risk_approach == "strict":
+        return {
+            "high":   {"depth": "full",        "days": 180,  "triggers": ["policy_change", "breach_reported", "regulatory_change"]},
+            "medium": {"depth": "full",         "days": 365,  "triggers": ["policy_change", "breach_reported"]},
+            "low":    {"depth": "scan",         "days": 730,  "triggers": ["breach_reported"]},
+        }
+    if risk_approach == "pragmatic":
+        return {
+            "high":   {"depth": "full",         "days": 365,  "triggers": ["breach_reported", "regulatory_change"]},
+            "medium": {"depth": "lightweight",  "days": 1095, "triggers": ["breach_reported"]},
+            "low":    {"depth": "none",         "days": 0,    "triggers": []},
+        }
+    # standard (default)
+    return {
+        "high":   {"depth": "full",        "days": 365,  "triggers": ["policy_change", "breach_reported", "regulatory_change"]},
+        "medium": {"depth": "full",        "days": 730,  "triggers": ["policy_change", "breach_reported"]},
+        "low":    {"depth": "scan",        "days": 0,    "triggers": ["breach_reported"]},
+    }
+
+
+def _infer_escalation(risk_approach: str, data_types: dict) -> list[dict]:
+    """Derive auto-escalation triggers from risk approach and data types."""
+    triggers: list[dict] = []
+
+    if risk_approach in ("strict", "standard"):
+        triggers.append({
+            "type": "tier",
+            "tier": "HIGH",
+            "label": "Vendor risk tier is HIGH — requires security review",
+        })
+    if risk_approach == "strict":
+        triggers.append({
+            "type": "tier",
+            "tier": "MEDIUM",
+            "label": "Vendor risk tier is MEDIUM — requires conditional approval",
+        })
+    if data_types.get("phi"):
+        triggers.append({
+            "type": "red_flag",
+            "flag_label": "AI training",
+            "label": "AI training on customer PHI data detected — HIPAA violation risk",
+        })
+    elif risk_approach in ("strict", "standard"):
+        triggers.append({
+            "type": "red_flag",
+            "flag_label": "AI training",
+            "label": "AI training on customer data detected with no opt-out mechanism",
+        })
+
+    return triggers
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Config writer (new format)
+# ─────────────────────────────────────────────────────────────────────
+
+def _write_new_config(
+    path: pathlib.Path,
+    answers: dict,
+    weights: dict[str, float],
+    frameworks: list[str],
+    reassessment: dict,
+    auto_escalate: list[dict],
+) -> None:
+    """Write config in the new structured YAML format."""
+    data_types: dict = answers.get("data_types", {})
+    certifications: list[str] = answers.get("certifications", [])
+    locations: list[str] = answers.get("locations", [])
+    org_type: str = answers.get("org_type", "")
+    risk_approach: str = answers.get("risk_approach", "standard")
+
+    # Build document requirements from certifications + data types
+    doc_requirements: list[str] = list(certifications)
+    if data_types.get("phi") and "HIPAA BAA" not in doc_requirements:
+        doc_requirements.append("HIPAA BAA")
+    if "European Union / EEA" in locations and "GDPR DPA" not in doc_requirements:
+        doc_requirements.append("GDPR DPA")
+    if "United Kingdom" in locations and "UK GDPR DPA" not in doc_requirements:
+        doc_requirements.append("UK GDPR DPA")
+
+    try:
+        import yaml
+
+        config_data: dict = {
+            "company": {
+                "org_type": org_type,
+                "locations": locations,
+            },
+            "data_types": {
+                "phi":               data_types.get("phi", False),
+                "pci":               data_types.get("pci", False),
+                "children":          data_types.get("children", False),
+                "biometric":         data_types.get("biometric", False),
+                "hr_data":           data_types.get("hr_data", False),
+                "special_categories": data_types.get("special_categories", False),
+            },
+            "frameworks": {
+                "inferred": frameworks,
+                "certifications_required": certifications,
+            },
+            "risk_appetite": risk_approach,
+            "reassessment": reassessment,
+        }
+        if doc_requirements:
+            config_data["document_requirements"] = doc_requirements
+        if answers.get("infra_location"):
+            config_data["company"]["infra_location"] = answers["infra_location"]
+        if answers.get("baa_required"):
+            config_data["company"]["baa_required"] = answers["baa_required"]
+        if answers.get("pci_level"):
+            config_data["company"]["pci_level"] = answers["pci_level"]
+        config_data["dimension_weights"] = {k: float(v) for k, v in weights.items()}
+        if auto_escalate:
+            config_data["auto_escalate"] = auto_escalate
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.dump(config_data, default_flow_style=False, allow_unicode=True, sort_keys=False))
+        return
+    except ImportError:
+        pass
+
+    # Manual YAML fallback
+    lines: list[str] = []
+
+    lines.append("company:")
+    lines.append(f'  org_type: "{org_type}"')
+    lines.append("  locations:")
+    for loc in locations:
+        lines.append(f'    - "{loc}"')
+    if answers.get("infra_location"):
+        lines.append(f'  infra_location: "{answers["infra_location"]}"')
+    if answers.get("baa_required"):
+        lines.append(f'  baa_required: "{answers["baa_required"]}"')
+    if answers.get("pci_level"):
+        lines.append(f'  pci_level: "{answers["pci_level"]}"')
+
+    lines.append("")
+    lines.append("data_types:")
+    for k, v in data_types.items():
+        lines.append(f"  {k}: {'true' if v else 'false'}")
+
+    lines.append("")
+    lines.append("frameworks:")
+    lines.append("  inferred:")
+    for f in frameworks:
+        lines.append(f'    - "{f}"')
+    lines.append("  certifications_required:")
+    for c in certifications:
+        lines.append(f'    - "{c}"')
+
+    lines.append("")
+    lines.append(f"risk_appetite: {risk_approach}")
+
+    lines.append("")
+    lines.append("reassessment:")
+    for tier, tier_cfg in reassessment.items():
+        lines.append(f"  {tier}:")
+        lines.append(f"    depth: {tier_cfg['depth']}")
+        lines.append(f"    days: {tier_cfg['days']}")
+        lines.append("    triggers:")
+        for t in tier_cfg.get("triggers", []):
+            lines.append(f"      - {t}")
+
+    if doc_requirements:
+        lines.append("")
+        lines.append("document_requirements:")
+        for d in doc_requirements:
+            lines.append(f'  - "{d}"')
+
+    lines.append("")
+    lines.append("dimension_weights:")
+    for k, v in weights.items():
+        lines.append(f"  {k}: {v}")
+
+    if auto_escalate:
+        lines.append("")
+        lines.append("auto_escalate:")
+        for trigger in auto_escalate:
+            items = list(trigger.items())
+            for i, (tk, tv) in enumerate(items):
+                prefix = "  - " if i == 0 else "    "
+                if isinstance(tv, str) and (" " in tv or ":" in tv):
+                    lines.append(f'{prefix}{tk}: "{tv}"')
+                else:
+                    lines.append(f"{prefix}{tk}: {tv}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n")
 
 
 # ─────────────────────────────────────────────────────────────────────
 # Wizard
 # ─────────────────────────────────────────────────────────────────────
 
-def run_wizard(con: Console | None = None, reset: bool = False) -> None:
-    from core.config import (
-        CONFIG_PATHS, calculate_weights, get_profile_label,
-        load_config, write_config,
-    )
-    from core.scoring.rubric import RUBRIC
-
+def run_wizard(con: Console | None = None, reset: bool = False, advanced: bool = False) -> None:
     if con is None:
         con = Console()
 
-    # --reset clears both the progress file and any existing config
+    if advanced:
+        con.print()
+        con.print("[bold color(172)]BANDIT SETUP --advanced[/]")
+        con.print()
+        con.print("[color(245)]Advanced configuration is coming soon.[/]")
+        con.print("[color(245)]It will allow you to set per-dimension weights, custom cadence, and team routing directly.[/]")
+        con.print()
+        con.print("[color(245)]For now, run [color(220)]bandit setup[/][color(245)] to configure your profile with the guided wizard.[/]")
+        con.print()
+        return
+
+    # --reset clears both progress and config
     if reset:
         _clear_progress()
 
@@ -285,7 +495,7 @@ def run_wizard(con: Console | None = None, reset: bool = False) -> None:
                 con.print()
                 con.print(
                     f"  [color(220)]Incomplete setup found[/] "
-                    f"[color(245)](last completed: Q{last_q}/26)[/]\n"
+                    f"[color(245)](last completed: Q{last_q})[/]\n"
                 )
                 con.print(f"  [color(245)]r)[/]  Resume from Q{last_q + 1}")
                 con.print(f"  [color(245)]s)[/]  Start over")
@@ -298,419 +508,296 @@ def run_wizard(con: Console | None = None, reset: bool = False) -> None:
                     answers = dict(progress.get("answers", {}))
                     resume_from = last_q
 
-    # ── Intro (only when starting fresh) ─────────────────────────────
+    # ── Intro ─────────────────────────────────────────────────────────
     if resume_from == 0:
         con.print()
-        con.print("[bold color(172)]BANDIT SETUP[/]  [color(245)]Industry & Regulatory Profile Wizard[/]")
+        con.print("[bold color(172)]BANDIT SETUP[/]  [color(245)]Profile Wizard[/]")
         con.print()
-        con.print("[color(245)]This wizard configures Bandit to weight dimensions according to your")
-        con.print("regulatory environment and data risk profile. Answers are saved to")
-        con.print(f"[color(220)]bandit.config.yml[/][color(245)] in the current directory.[/]")
+        con.print("[color(245)]5 questions (+ up to 3 conditional) — about 2 minutes.")
+        con.print("Bandit will infer your applicable frameworks and adjust dimension")
+        con.print(f"weights automatically. Saves to [color(220)]bandit.config.yml[/][color(245)].[/]")
         con.print()
-
-        existing = load_config()
-        if existing and not reset:
-            label = get_profile_label(existing)
-            label_str = f" ({label})" if label else ""
-            con.print(f"[color(220)]Note:[/] [color(245)]Existing config found{label_str}.")
-            con.print("[color(245)]Run [color(220)]bandit setup --reset[/][color(245)] to overwrite, or continue to update.[/]")
-            con.print()
     else:
         con.print()
         con.print("[bold color(172)]BANDIT SETUP[/]  [color(245)]Resuming…[/]")
 
-    # ── Wizard body (wrapped for Ctrl+C) ─────────────────────────────
+    # ── Count total questions (5 core + conditionals) ─────────────────
+    # We'll track max_q dynamically after we know the conditionals
+    # For display we show question numbers 1-8 max
+
     try:
-        # ── Section 1 — Where you operate ───────────────────────────
-        if resume_from < 3:
-            _section_header(con, 1, "Where you operate")
-
+        # ── Q1 — Organisation type ───────────────────────────────────
         if resume_from < 1:
-            con.print("  [bold]Q1.[/] [color(250)]Where is your company headquartered?[/]\n")
-            hq_options = ["US", "EU/EEA", "UK", "Canada", "APAC", "Other"]
-            answers["hq_region"] = _ask_single(con, "", hq_options)
-            _save_progress(answers, 1)
-
-        if resume_from < 2:
-            con.print()
-            con.print("  [bold]Q2.[/] [color(250)]Which regions have your customers? (select all that apply)[/]\n")
-            region_options = ["US", "EU/EEA", "UK", "Canada", "APAC", "Global", "Other"]
-            answers["customer_regions"] = _ask_multi(con, "", region_options, defaults=[1])
-            _save_progress(answers, 2)
-
-        if resume_from < 3:
-            con.print()
-            con.print("  [bold]Q3.[/] [color(250)]Where is your infrastructure hosted? (select all that apply)[/]\n")
-            infra_options = ["US", "EU/EEA", "UK", "APAC", "Other"]
-            answers["infra_regions"] = _ask_multi(con, "", infra_options, defaults=[1])
-            _save_progress(answers, 3)
-            con.print()
-            _section_summary(con, [
-                ("HQ",             answers["hq_region"]),
-                ("Customers",      ", ".join(answers["customer_regions"])),
-                ("Infrastructure", ", ".join(answers["infra_regions"])),
-            ])
-
-        # ── Section 2 — Industry ─────────────────────────────────────
-        if resume_from < 4:
-            _section_header(con, 2, "Your industry")
-            con.print("  [bold]Q4.[/] [color(250)]Which industry best describes your company?[/]\n")
-            industry_options = [
-                "Technology",
-                "Healthcare",
-                "Financial Services",
-                "Education",
+            _section_header(con, 1, "5+", "Organisation type")
+            org_options = [
+                "Healthcare / Pharma",
+                "Financial Services / FinTech",
+                "Technology / SaaS",
+                "Education / EdTech",
+                "Government / Public Sector",
                 "Retail / E-commerce",
-                "Government / Public sector",
                 "Professional Services",
+                "Non-profit",
                 "Other",
             ]
-            answers["industry"] = _ask_single(con, "", industry_options)
+            answers["org_type"] = _ask_single(con, "", org_options, default=3)
+            _save_progress(answers, 1)
+
+        # ── Q2 — Locations ───────────────────────────────────────────
+        if resume_from < 2:
+            _section_header(con, 2, "5+", "Where do you and your customers operate?",
+                            "select all that apply")
+            location_options = [
+                "United States",
+                "European Union / EEA",
+                "United Kingdom",
+                "Canada",
+                "APAC (Australia, Japan, Singapore, etc.)",
+                "Other",
+            ]
+            answers["locations"] = _ask_multi(con, "", location_options, defaults=[1])
+            _save_progress(answers, 2)
+
+        # ── Q3 — Sensitive data types ────────────────────────────────
+        if resume_from < 3:
+            _section_header(con, 3, "5+", "What sensitive data do vendors handle?",
+                            "select all that apply")
+
+            # Pre-select hints based on org type
+            org = answers.get("org_type", "")
+            data_options = [
+                "PHI / Medical records (HIPAA / Art. 9)",
+                "Payment card data (PCI DSS)",
+                "Children's data (COPPA / GDPR Art. 8)",
+                "Biometric data (facial recognition, fingerprints)",
+                "Employee / HR records",
+                "Special categories (race, religion, sexual orientation, etc.)",
+                "None of the above",
+            ]
+            # Pre-select suggestions based on org type
+            preselect: list[int] = []
+            if "Healthcare" in org:
+                preselect = [1]
+            elif "Financial" in org:
+                preselect = [2]
+            elif "Education" in org:
+                preselect = [3]
+
+            if preselect:
+                con.print(
+                    f"  [color(245)]Suggested for {org}: "
+                    + ", ".join(str(p) for p in preselect)
+                    + "[/]\n"
+                )
+
+            selected = _ask_multi(
+                con, "", data_options,
+                defaults=preselect if preselect else None,
+                min_count=0,
+                allow_none=True,
+            )
+
+            # Parse into structured data_types dict
+            dt: dict[str, bool] = {
+                "phi": False, "pci": False, "children": False,
+                "biometric": False, "hr_data": False, "special_categories": False,
+            }
+            for s in selected:
+                if "PHI" in s:
+                    dt["phi"] = True
+                elif "Payment card" in s:
+                    dt["pci"] = True
+                elif "Children" in s:
+                    dt["children"] = True
+                elif "Biometric" in s:
+                    dt["biometric"] = True
+                elif "Employee" in s or "HR" in s:
+                    dt["hr_data"] = True
+                elif "Special categories" in s:
+                    dt["special_categories"] = True
+            answers["data_types"] = dt
+            _save_progress(answers, 3)
+
+        # ── Q4 — Required certifications ─────────────────────────────
+        if resume_from < 4:
+            _section_header(con, 4, "5+", "Vendor certifications you require",
+                            "select all that apply")
+            cert_options = [
+                "SOC 2 Type II",
+                "ISO 27001",
+                "HIPAA BAA",
+                "PCI DSS compliance letter (AOC)",
+                "GDPR DPA / Article 28 agreement",
+                "UK GDPR DPA",
+                "None required",
+            ]
+            # Pre-select based on data types and locations
+            dt = answers.get("data_types", {})
+            locs = answers.get("locations", [])
+            cert_preselect: list[int] = []
+            if dt.get("phi"):
+                cert_preselect.append(3)  # HIPAA BAA
+            if dt.get("pci"):
+                cert_preselect.append(4)  # PCI DSS
+            if "European Union / EEA" in locs:
+                cert_preselect.append(5)  # GDPR DPA
+            if "United Kingdom" in locs and 6 not in cert_preselect:
+                cert_preselect.append(6)  # UK GDPR DPA
+            if not cert_preselect:
+                cert_preselect = [1]  # default SOC 2
+
+            if cert_preselect:
+                con.print(
+                    "  [color(245)]Suggested: "
+                    + ", ".join(str(p) for p in cert_preselect)
+                    + "[/]\n"
+                )
+
+            cert_selected = _ask_multi(
+                con, "", cert_options,
+                defaults=cert_preselect,
+                min_count=0,
+                allow_none=True,
+            )
+            # Strip "None required" from the stored list
+            answers["certifications"] = [c for c in cert_selected if c != "None required"]
             _save_progress(answers, 4)
-            con.print()
-            _section_summary(con, [("Industry", answers["industry"])])
 
-        # ── Section 3 — Your data ────────────────────────────────────
-        if resume_from < 10:
-            _section_header(con, 3, "Your data", "affects D1, D3, D5, D6, D8 weights")
-
+        # ── Q5 — Risk approach ───────────────────────────────────────
         if resume_from < 5:
-            con.print("  [bold]Q5.[/] [color(250)]Do any vendors handle Protected Health Information (PHI)?[/]")
-            con.print("       [color(245)]Medical records, diagnoses, treatment data covered by HIPAA / Art. 9[/]\n")
-            answers["phi_in_scope"] = _ask_bool(con, "")
+            _section_header(con, 5, "5+", "Risk approach",
+                            "sets escalation thresholds and reassessment cadence")
+            approach_options = [
+                "Strict     — escalate early, assess HIGH vendors every 6 months",
+                "Standard   — balanced, follow risk tier, annual HIGH assessment (default)",
+                "Pragmatic  — escalate only on HIGH + critical red flags",
+            ]
+            approach_val = _ask_single(con, "", approach_options, default=2)
+            _approach_map = {1: "strict", 2: "standard", 3: "pragmatic"}
+            answers["risk_approach"] = _approach_map[approach_options.index(approach_val) + 1]
             _save_progress(answers, 5)
 
-        if resume_from < 6:
-            con.print()
-            con.print("  [bold]Q6.[/] [color(250)]Do any vendors handle payment card data (PCI)?[/]")
-            con.print("       [color(245)]Card numbers, CVVs, or data covered by PCI DSS[/]\n")
-            answers["pci_in_scope"] = _ask_bool(con, "")
+        # ── Conditional Q6 — Infrastructure (if EU/EEA in locations) ─
+        locs = answers.get("locations", [])
+        needs_infra_q = "European Union / EEA" in locs or "United Kingdom" in locs
+
+        if needs_infra_q and resume_from < 6:
+            _section_header(con, 6, "8", "Where is vendor infrastructure hosted?",
+                            "affects cross-border transfer risk (D4)")
+            infra_options = [
+                "EU / EEA only",
+                "US only",
+                "Both EU and US (cross-border transfers)",
+                "Other / unknown",
+            ]
+            infra_val = _ask_single(con, "", infra_options, default=3)
+            _infra_map = {
+                "EU / EEA only":                   "eu_only",
+                "US only":                         "us_only",
+                "Both EU and US (cross-border transfers)": "both",
+                "Other / unknown":                 "other",
+            }
+            answers["infra_location"] = _infra_map.get(infra_val, "other")
             _save_progress(answers, 6)
 
-        if resume_from < 7:
-            con.print()
-            con.print("  [bold]Q7.[/] [color(250)]Do any vendors process children's data?[/]")
-            con.print("       [color(245)]Under 13 (COPPA) or under 16 (GDPR Art. 8)[/]\n")
-            answers["childrens_data"] = _ask_bool(con, "")
+        # ── Conditional Q7 — BAA (if PHI in data types) ──────────────
+        dt = answers.get("data_types", {})
+        needs_baa_q = dt.get("phi", False)
+
+        if needs_baa_q and resume_from < 7:
+            _section_header(con, 7, "8", "HIPAA Business Associate Agreement",
+                            "required for PHI-handling vendors")
+            baa_options = [
+                "Yes — required for all PHI-handling vendors",
+                "Yes — required for clinical/direct PHI vendors only",
+                "No — handled differently",
+            ]
+            answers["baa_required"] = _ask_single(con, "", baa_options, default=1)
             _save_progress(answers, 7)
 
-        if resume_from < 8:
-            con.print()
-            con.print("  [bold]Q8.[/] [color(250)]Do any vendors process special-category data?[/]")
-            con.print("       [color(245)]Race, ethnic origin, health, biometric, religious, political, sexual orientation[/]\n")
-            answers["special_categories"] = _ask_bool(con, "")
+        # ── Conditional Q8 — PCI level (if payment card in data types) ─
+        needs_pci_q = dt.get("pci", False)
+
+        if needs_pci_q and resume_from < 8:
+            _section_header(con, 8, "8", "PCI merchant level",
+                            "determines reporting requirements")
+            pci_options = [
+                "Level 1 — more than 6M Visa/Mastercard transactions per year",
+                "Level 2 — 1M to 6M transactions per year",
+                "Level 3 / 4 — fewer than 1M transactions per year",
+            ]
+            answers["pci_level"] = _ask_single(con, "", pci_options, default=3)
             _save_progress(answers, 8)
 
-        if resume_from < 9:
-            con.print()
-            con.print("  [bold]Q9.[/] [color(250)]Do you onboard AI/ML vendors that may train on your data?[/]")
-            con.print("       [color(245)]Applies D6 weight modifier and enables AI red-flag escalation[/]\n")
-            answers["ai_vendors"] = _ask_bool(con, "")
-            _save_progress(answers, 9)
+        # ── Inference engine ──────────────────────────────────────────
+        frameworks = _infer_frameworks(answers)
+        weights = _infer_weights(answers)
+        risk_approach: str = answers.get("risk_approach", "standard")
+        reassessment = _infer_reassessment(risk_approach)
+        auto_escalate = _infer_escalation(risk_approach, answers.get("data_types", {}))
 
-        if resume_from < 10:
-            con.print()
-            con.print("  [bold]Q10.[/] [color(250)]Approximately how many vendors will you assess per month?[/]\n")
-            volume_options = ["1–10 (occasional)", "11–50 (regular)", "51–200 (high volume)", "200+ (enterprise)"]
-            answers["vendor_volume"] = _ask_single(con, "", volume_options)
-            _save_progress(answers, 10)
-            con.print()
-            _section_summary(con, [
-                ("PHI in scope",       "Yes" if answers["phi_in_scope"] else "No"),
-                ("PCI in scope",       "Yes" if answers["pci_in_scope"] else "No"),
-                ("Children's data",    "Yes" if answers["childrens_data"] else "No"),
-                ("Special categories", "Yes" if answers["special_categories"] else "No"),
-                ("AI vendors",         "Yes" if answers["ai_vendors"] else "No"),
-                ("Monthly volume",     answers["vendor_volume"]),
-            ])
-
-        # ── Section 4 — Regulatory obligations ──────────────────────
-        if resume_from < 12:
-            _section_header(con, 4, "Regulatory obligations")
-
-        if resume_from < 11:
-            con.print("  [bold]Q11.[/] [color(250)]Which regulations apply to your organisation? (select all that apply)[/]\n")
-            reg_options = ["GDPR", "CCPA/CPRA", "HIPAA", "PCI DSS", "UK GDPR", "LGPD", "PIPL", "Other"]
-            answers["regulations"] = _ask_multi(con, "", reg_options, min_count=1)
-            _save_progress(answers, 11)
-
-        if resume_from < 12:
-            con.print()
-            con.print("  [bold]Q12.[/] [color(250)]Does your organisation have a designated Data Protection Officer (DPO)?[/]\n")
-            answers["dpo_present"] = _ask_bool(con, "")
-            _save_progress(answers, 12)
-            con.print()
-            _section_summary(con, [
-                ("Regulations", ", ".join(answers["regulations"])),
-                ("DPO present",  "Yes" if answers["dpo_present"] else "No"),
-            ])
-
-        # ── Section 5 — Risk appetite ────────────────────────────────
-        if resume_from < 15:
-            _section_header(con, 5, "Risk appetite", "controls auto-escalation thresholds")
-
-        if resume_from < 13:
-            con.print("  [bold]Q13.[/] [color(250)]What is your organisation's risk appetite for vendor privacy risk?[/]\n")
-            appetite_options = [
-                "Conservative  (lower thresholds — escalate early)",
-                "Moderate      (balanced — follow risk tier)",
-                "Liberal       (higher thresholds — escalate only on HIGH)",
-            ]
-            appetite_val = _ask_single(con, "", appetite_options, default=2)
-            _appetite_map = {1: "conservative", 2: "moderate", 3: "liberal"}
-            answers["risk_appetite"] = _appetite_map[appetite_options.index(appetite_val) + 1]
-            _save_progress(answers, 13)
-
-        if resume_from < 14:
-            con.print()
-            con.print("  [bold]Q14.[/] [color(250)]At what risk tier should auto-escalation trigger?[/]")
-            con.print("       [color(245)]Escalation means DPO / security review required before proceeding[/]\n")
-            escalate_options = [
-                "HIGH tier only",
-                "HIGH or MEDIUM tier",
-                "Never (manual review only)",
-            ]
-            answers["escalate_at"] = _ask_single(con, "", escalate_options)
-            _save_progress(answers, 14)
-
-        if resume_from < 15:
-            con.print()
-            con.print("  [bold]Q15.[/] [color(250)]Should AI training red flags trigger escalation regardless of overall score?[/]")
-            con.print("       [color(245)]Any detection of 'AI training bundled under generic improvement' → immediate escalation[/]\n")
-            answers["ai_escalate"] = _ask_bool(con, "")
-            _save_progress(answers, 15)
-            con.print()
-            _section_summary(con, [
-                ("Risk appetite",    answers["risk_appetite"].capitalize()),
-                ("Escalate at",      answers["escalate_at"]),
-                ("AI training flag", "Escalate always" if answers["ai_escalate"] else "Follow risk tier"),
-            ])
-
-        # ── Section 6 — Team context & reassessment ──────────────────
-        if resume_from < 26:
-            _section_header(con, 6, "Team context & reassessment")
-
-        if resume_from < 16:
-            con.print("  [bold]Q16.[/] [color(250)]Who typically reviews vendor assessments at your organisation?[/]\n")
-            team_options = [
-                "GRC team",
-                "Legal / Privacy counsel",
-                "Security team",
-                "DPO",
-                "Individual / ad hoc",
-                "Shared responsibility",
-            ]
-            answers["review_team"] = _ask_single(con, "", team_options)
-            _save_progress(answers, 16)
-
-        # Shared depth options (same labels for all tiers)
-        _depth_options = [
-            ("Full assessment (all 8 dimensions)", "full"),
-            ("Lightweight (D1, D6, D7 only)",      "lightweight"),
-            ("Privacy policy scan (red flags only)", "scan"),
-            ("No automated assessment",             "none"),
-        ]
-
-        # ════════════════════════════════════════════════════════════
-        # HIGH RISK VENDORS
-        # ════════════════════════════════════════════════════════════
-        if resume_from < 19:
-            con.print()
-            con.print("[bold color(196)]  ══ HIGH RISK VENDORS ══════════════════════════════════[/]")
-            con.print()
-
-        if resume_from < 17:
-            con.print("  [bold]Q17a.[/] [color(250)]Assessment depth for HIGH risk vendors?[/]\n")
-            answers.setdefault("reassessment", {})
-            for i, (label, _) in enumerate(_depth_options, 1):
-                marker = "  [color(245)]← default[/]" if i == 1 else ""
-                con.print(f"  [color(245)]{i}.[/] {label}{marker}")
-            raw_d = con.input("\n  [color(220)]Enter 1–4[/] [color(245)](default 1):[/] ").strip()
-            try:
-                di = int(raw_d) if raw_d else 1
-                depth = _depth_options[max(1, min(di, 4)) - 1][1]
-            except (ValueError, IndexError):
-                depth = "full"
-            answers["reassessment"]["high"] = {"depth": depth}
-            _save_progress(answers, 17)
-
-        if resume_from < 18:
-            con.print()
-            con.print("  [bold]Q17b.[/] [color(250)]How often do you reassess HIGH risk vendors?[/]\n")
-            _high_cadence = [
-                ("Every 6 months  (180 days)", 180),
-                ("Every year      (365 days)", 365),
-                ("Every 18 months (548 days)", 548),
-                ("Every 2 years   (730 days)", 730),
-                ("On policy change only",      0),
-                ("One time only — no re-assessment", 0),
-            ]
-            days = _ask_cadence(con, _high_cadence, default_idx=2)
-            answers["reassessment"]["high"]["days"] = days
-            _save_progress(answers, 18)
-
-        if resume_from < 19:
-            con.print()
-            con.print("  [bold]Q17c.[/] [color(250)]What triggers an out-of-cycle reassessment for HIGH risk vendors?[/]\n")
-            triggers = _ask_triggers(con, defaults=["policy_change", "breach_reported", "regulatory_change"])
-            answers["reassessment"]["high"]["triggers"] = triggers
-            _save_progress(answers, 19)
-
-        # ════════════════════════════════════════════════════════════
-        # MEDIUM RISK VENDORS
-        # ════════════════════════════════════════════════════════════
-        if resume_from < 22:
-            con.print()
-            con.print("[bold color(220)]  ══ MEDIUM RISK VENDORS ════════════════════════════════[/]")
-            con.print()
-
-        if resume_from < 20:
-            con.print("  [bold]Q18a.[/] [color(250)]Assessment depth for MEDIUM risk vendors?[/]\n")
-            for i, (label, _) in enumerate(_depth_options, 1):
-                marker = "  [color(245)]← default[/]" if i == 1 else ""
-                con.print(f"  [color(245)]{i}.[/] {label}{marker}")
-            raw_d = con.input("\n  [color(220)]Enter 1–4[/] [color(245)](default 1):[/] ").strip()
-            try:
-                di = int(raw_d) if raw_d else 1
-                depth = _depth_options[max(1, min(di, 4)) - 1][1]
-            except (ValueError, IndexError):
-                depth = "full"
-            answers["reassessment"].setdefault("medium", {})["depth"] = depth
-            _save_progress(answers, 20)
-
-        if resume_from < 21:
-            con.print()
-            con.print("  [bold]Q18b.[/] [color(250)]How often do you reassess MEDIUM risk vendors?[/]\n")
-            _medium_cadence = [
-                ("Every year      (365 days)",  365),
-                ("Every 18 months (548 days)",  548),
-                ("Every 2 years   (730 days)",  730),
-                ("Every 3 years   (1095 days)", 1095),
-                ("Every 5 years   (1825 days)", 1825),
-                ("On policy change only",       0),
-                ("One time only — no re-assessment", 0),
-            ]
-            days = _ask_cadence(con, _medium_cadence, default_idx=3)
-            answers["reassessment"]["medium"]["days"] = days
-            _save_progress(answers, 21)
-
-        if resume_from < 22:
-            con.print()
-            con.print("  [bold]Q18c.[/] [color(250)]What triggers an out-of-cycle reassessment for MEDIUM risk vendors?[/]\n")
-            triggers = _ask_triggers(con, defaults=["policy_change", "breach_reported"])
-            answers["reassessment"]["medium"]["triggers"] = triggers
-            _save_progress(answers, 22)
-
-        # ════════════════════════════════════════════════════════════
-        # LOW RISK VENDORS
-        # ════════════════════════════════════════════════════════════
-        if resume_from < 25:
-            con.print()
-            con.print("[bold color(82)]  ══ LOW RISK VENDORS ═══════════════════════════════════[/]")
-            con.print()
-
-        if resume_from < 23:
-            con.print("  [bold]Q19a.[/] [color(250)]Assessment depth for LOW risk vendors?[/]\n")
-            for i, (label, _) in enumerate(_depth_options, 1):
-                marker = "  [color(245)]← default[/]" if i == 3 else ""
-                con.print(f"  [color(245)]{i}.[/] {label}{marker}")
-            raw_d = con.input("\n  [color(220)]Enter 1–4[/] [color(245)](default 3):[/] ").strip()
-            try:
-                di = int(raw_d) if raw_d else 3
-                depth = _depth_options[max(1, min(di, 4)) - 1][1]
-            except (ValueError, IndexError):
-                depth = "scan"
-            answers["reassessment"].setdefault("low", {})["depth"] = depth
-            _save_progress(answers, 23)
-
-        if resume_from < 24:
-            con.print()
-            con.print("  [bold]Q19b.[/] [color(250)]How often do you reassess LOW risk vendors?[/]\n")
-            _low_cadence = [
-                ("Every year      (365 days)",  365),
-                ("Every 2 years   (730 days)",  730),
-                ("Every 3 years   (1095 days)", 1095),
-                ("Every 5 years   (1825 days)", 1825),
-                ("On policy change only",       0),
-                ("One time only — no re-assessment", 0),
-                ("Never",                       0),
-            ]
-            days = _ask_cadence(con, _low_cadence, default_idx=6)
-            answers["reassessment"]["low"]["days"] = days
-            _save_progress(answers, 24)
-
-        if resume_from < 25:
-            con.print()
-            con.print("  [bold]Q19c.[/] [color(250)]What triggers an out-of-cycle reassessment for LOW risk vendors?[/]\n")
-            triggers = _ask_triggers(con, defaults=["breach_reported"])
-            answers["reassessment"]["low"]["triggers"] = triggers
-            _save_progress(answers, 25)
-
-        # ── Maturity ─────────────────────────────────────────────────
-        if resume_from < 26:
-            con.print()
-            con.print(Rule(style="color(238)"))
-            con.print()
-            con.print("  [bold]Q26.[/] [color(250)]What describes your current vendor assessment maturity?[/]\n")
-            maturity_options = [
-                "Just starting  (building a programme from scratch)",
-                "Have a process (informal or spreadsheet-based)",
-                "Mature programme (policy-driven, tool-supported)",
-            ]
-            maturity_val = _ask_single(con, "", maturity_options)
-            _maturity_map = {1: "just starting", 2: "have a process", 3: "mature programme"}
-            answers["maturity"] = _maturity_map[maturity_options.index(maturity_val) + 1]
-            _save_progress(answers, 26)
-            con.print()
-            _section_summary(con, [
-                ("Review team", answers["review_team"]),
-                ("Maturity",    answers["maturity"].capitalize()),
-            ])
-
-        # ── Calculate weights ─────────────────────────────────────────
-        weights = calculate_weights(answers)
-        _default = {"D1": 1.0, "D2": 1.0, "D3": 1.0, "D4": 1.0, "D5": 1.0, "D6": 1.5, "D7": 1.0, "D8": 1.5}
-
-        # ── Build auto_escalate list ──────────────────────────────────
-        auto_escalate: list[dict] = []
-        if "HIGH" in answers["escalate_at"]:
-            auto_escalate.append({
-                "type": "tier",
-                "tier": "HIGH",
-                "label": "Vendor risk tier is HIGH — requires DPO / security review",
-            })
-        if "MEDIUM" in answers["escalate_at"]:
-            auto_escalate.append({
-                "type": "tier",
-                "tier": "MEDIUM",
-                "label": "Vendor risk tier is MEDIUM — requires conditional approval with gap remediation",
-            })
-        if answers.get("ai_escalate"):
-            auto_escalate.append({
-                "type": "red_flag",
-                "flag_label": "AI training",
-                "label": "AI training on customer data detected with no opt-out mechanism",
-            })
-
-        # ── Confirmation screen ───────────────────────────────────────
+        # ── Review screen ─────────────────────────────────────────────
         con.print()
         con.print(Rule(style="color(238)"))
         con.print()
-        con.print("[bold color(172)]REVIEW[/]  [color(245)]Check your profile before saving.[/]")
+        con.print("[bold color(172)]REVIEW[/]  [color(245)]Inferred profile — check before saving.[/]")
         con.print()
 
-        wt = Table(box=None, show_header=True, padding=(0, 2))
-        wt.add_column("Dim",     style="bold color(172)", no_wrap=True)
-        wt.add_column("Name",    style="color(245)")
-        wt.add_column("Default", style="color(245)", justify="right")
-        wt.add_column("Profile", justify="right")
+        # Company summary
+        org_table = Table(box=None, show_header=False, padding=(0, 2))
+        org_table.add_column(style="color(245)", no_wrap=True, min_width=22)
+        org_table.add_column(style="color(220)")
 
+        org_table.add_row("Organisation type", answers.get("org_type", "—"))
+        org_table.add_row("Locations", ", ".join(answers.get("locations", [])) or "—")
+        if answers.get("infra_location"):
+            _infra_display = {
+                "eu_only": "EU / EEA only",
+                "us_only": "US only",
+                "both":    "Both EU and US",
+                "other":   "Other / unknown",
+            }
+            org_table.add_row("Infra location", _infra_display.get(answers["infra_location"], answers["infra_location"]))
+        org_table.add_row("Risk approach", answers.get("risk_approach", "standard").capitalize())
+        if frameworks:
+            org_table.add_row("Inferred frameworks", ", ".join(frameworks))
+        certs = answers.get("certifications", [])
+        if certs:
+            org_table.add_row("Required certs", ", ".join(certs))
+
+        # Data types summary
+        dt = answers.get("data_types", {})
+        dt_active = [k for k, v in dt.items() if v]
+        _dt_labels = {
+            "phi": "PHI / Medical",
+            "pci": "Payment card",
+            "children": "Children's data",
+            "biometric": "Biometric",
+            "hr_data": "Employee / HR",
+            "special_categories": "Special categories",
+        }
+        if dt_active:
+            org_table.add_row("Sensitive data", ", ".join(_dt_labels.get(k, k) for k in dt_active))
+        if answers.get("baa_required"):
+            org_table.add_row("BAA", answers["baa_required"])
+        if answers.get("pci_level"):
+            org_table.add_row("PCI level", answers["pci_level"])
+
+        con.print(Panel(org_table, title="[bold color(172)]PROFILE SUMMARY[/]", border_style="color(238)"))
+
+        # Weights table
+        _default = dict(_DEFAULT_WEIGHTS)
         dim_names = {
             "D1": "Data Minimization", "D2": "Sub-processor Management",
             "D3": "Data Subject Rights", "D4": "Cross-Border Transfers",
             "D5": "Breach Notification", "D6": "AI/ML Data Usage",
             "D7": "Retention & Deletion", "D8": "DPA Completeness",
         }
+        wt = Table(box=None, show_header=True, padding=(0, 2))
+        wt.add_column("Dim",     style="bold color(172)", no_wrap=True)
+        wt.add_column("Name",    style="color(245)")
+        wt.add_column("Default", style="color(245)", justify="right")
+        wt.add_column("Profile", justify="right")
         for k in ["D1","D2","D3","D4","D5","D6","D7","D8"]:
             pw = weights[k]
             dw = _default[k]
@@ -721,125 +808,74 @@ def run_wizard(con: Console | None = None, reset: bool = False) -> None:
             else:
                 pw_str = f"[color(245)]×{pw:.1f}[/]"
             wt.add_row(k, dim_names[k], f"×{dw:.1f}", pw_str)
+        con.print(Panel(wt, title="[bold color(172)]DIMENSION WEIGHTS[/]", border_style="color(238)"))
 
-        industry = answers["industry"]
-        hq = answers["hq_region"]
-        regs = answers["regulations"]
-        profile_name = (f"{hq} " if hq in ("EU/EEA", "UK") else "") + industry
-
-        con.print(Panel(
-            wt,
-            title=f"[bold color(172)]DIMENSION WEIGHTS — {profile_name}[/]",
-            border_style="color(238)",
-        ))
-
-        reassessment: dict = answers.get("reassessment") or {}
+        # Reassessment schedule
         _tier_color = {"HIGH": "color(196)", "MEDIUM": "color(220)", "LOW": "color(82)"}
-        _trigger_labels_map = {
-            "policy_change":      "Policy change",
-            "breach_reported":    "Vendor breach",
-            "regulatory_change":  "Regulatory change",
-            "contract_renewal":   "Contract renewal",
-        }
         _depth_display = {
-            "full":        "Full assessment",
-            "lightweight": "Lightweight (D1, D6, D7)",
-            "scan":        "Privacy policy scan",
-            "none":        "No automated assessment",
+            "full": "Full assessment", "lightweight": "Lightweight (D1, D6, D7)",
+            "scan": "Privacy policy scan", "none": "No automated assessment",
         }
-
         rt = Table(box=None, show_header=True, padding=(0, 2))
         rt.add_column("Tier",    style="bold", no_wrap=True, min_width=8)
         rt.add_column("Depth",   style="color(250)")
         rt.add_column("Cadence", style="color(220)")
         for tier_key, tier_label in (("high", "HIGH"), ("medium", "MEDIUM"), ("low", "LOW")):
-            tc = reassessment.get(tier_key) or {}
-            depth_str = _depth_display.get(tc.get("depth", "full"), tc.get("depth", "—"))
-            cadence_str = _days_label(tc.get("days", 365))
+            tc = reassessment[tier_key]
             rt.add_row(
                 f"[{_tier_color[tier_label]}]{tier_label}[/]",
-                depth_str, cadence_str,
+                _depth_display.get(tc["depth"], tc["depth"]),
+                _days_label(tc["days"]),
             )
+        con.print(Panel(rt, title="[bold color(172)]REASSESSMENT SCHEDULE[/]", border_style="color(238)"))
 
-        # Group triggers by tier for compact display
-        _trig_grouped: dict[tuple, list[str]] = {}
-        for tier_key, tier_label in (("high", "HIGH"), ("medium", "MEDIUM"), ("low", "LOW")):
-            tc = reassessment.get(tier_key) or {}
-            trig_key = tuple(tc.get("triggers") or [])
-            _trig_grouped.setdefault(trig_key, []).append(tier_label)
-
-        trig_lines = Text()
-        trig_lines.append("  Out-of-cycle triggers:\n", style="color(245)")
-        for trig_key, tier_labels in _trig_grouped.items():
-            tier_str = " + ".join(
-                f"[{_tier_color[t]}]{t}[/{_tier_color[t]}]" for t in tier_labels
-            )
-            if trig_key:
-                t_str = " · ".join(
-                    _trigger_labels_map.get(k, k) for k in trig_key
-                )
-            else:
-                t_str = "Manual only"
-            trig_lines.append(f"  ", style="")
-            trig_lines.append(tier_str + "  ")
-            trig_lines.append(t_str + "\n", style="color(245)")
-
-        sched_text = Text()
-        sched_text.append("  Reassessment schedule\n\n", style="bold color(245)")
-        con.print(Panel(
-            Text.assemble(sched_text, trig_lines),
-            title="[bold color(172)]REASSESSMENT SCHEDULE[/]",
-            border_style="color(238)",
-        ))
-        con.print(Panel(rt, border_style="color(238)"))
-
+        # Escalation
         if auto_escalate:
             esc_lines = Text()
             for t in auto_escalate:
                 esc_lines.append("  ⚠  ", style="color(220)")
                 esc_lines.append(t["label"] + "\n", style="color(245)")
-            con.print(Panel(esc_lines, title="[bold color(220)]AUTO-ESCALATION TRIGGERS[/]", border_style="color(220)"))
-        else:
-            con.print("[color(245)]  No auto-escalation configured.[/]")
+            con.print(Panel(esc_lines, title="[bold color(220)]AUTO-ESCALATION[/]", border_style="color(220)"))
 
+        # ── Save prompt ───────────────────────────────────────────────
         con.print()
         config_path = pathlib.Path("bandit.config.yml")
         con.print(f"  [color(245)]Config will be saved to:[/] [color(220)]{config_path.resolve()}[/]")
         con.print()
 
-        confirmed = _ask_bool(con, "Save this profile?", default=True)
-        if not confirmed:
-            con.print("\n  [color(245)]Setup cancelled. No changes saved.[/]\n")
-            return
+        while True:
+            choice = con.input(
+                "  [color(220)]Y)[/] [color(245)]Save    "
+                "[color(220)]n)[/][color(245)] Cancel    "
+                "[color(220)]e)[/][color(245)] Edit (restart wizard):[/] "
+            ).strip().lower()
+            if not choice or choice == "y":
+                break
+            if choice == "n":
+                con.print("\n  [color(245)]Setup cancelled. No changes saved.[/]\n")
+                return
+            if choice == "e":
+                _clear_progress()
+                con.print("\n  [color(245)]Restarting wizard…[/]\n")
+                run_wizard(con, reset=True)
+                return
 
-        # ── Build and write config ────────────────────────────────────
-        profile = {
-            "name": profile_name,
-            "industry": industry,
-            "hq_region": hq,
-            "customer_regions": answers["customer_regions"],
-            "infra_regions": answers["infra_regions"],
-            "regulations": regs,
-            "risk_appetite": answers["risk_appetite"],
-            "dpo_present": answers["dpo_present"],
-            "phi_in_scope": answers["phi_in_scope"],
-            "pci_in_scope": answers["pci_in_scope"],
-            "childrens_data": answers["childrens_data"],
-            "special_categories": answers["special_categories"],
-            "ai_vendors": answers["ai_vendors"],
-            "review_team": answers["review_team"],
-            "maturity": answers["maturity"],
-            "weights": {k: float(v) for k, v in weights.items()},
-        }
-
-        write_config(config_path, profile, auto_escalate, reassessment)
+        # ── Write config ──────────────────────────────────────────────
+        _write_new_config(
+            config_path, answers, weights, frameworks, reassessment, auto_escalate
+        )
         _clear_progress()
 
         con.print()
         con.print(
             f"  [bold color(82)]✓[/]  [color(245)]Profile saved to[/] [color(220)]{config_path}[/]"
         )
-        con.print(f"  [color(245)]All future assessments will use the [color(220)]{profile_name}[/] profile.[/]")
+        org_type = answers.get("org_type", "")
+        locs = answers.get("locations", [])
+        label = f"{org_type}" + (f" · {', '.join(locs[:2])}" if locs else "")
+        con.print(f"  [color(245)]Active profile:[/] [color(220)]{label}[/]")
+        if frameworks:
+            con.print(f"  [color(245)]Frameworks:[/] [color(220)]{', '.join(frameworks)}[/]")
         con.print()
 
     except KeyboardInterrupt:
@@ -847,7 +883,7 @@ def run_wizard(con: Console | None = None, reset: bool = False) -> None:
         if progress and progress.get("last_completed_question", 0) > 0:
             last_q = progress["last_completed_question"]
             con.print(
-                f"\n\n  [color(245)]Setup paused at Q{last_q}/26. "
+                f"\n\n  [color(245)]Setup paused at Q{last_q}. "
                 f"Run [color(220)]bandit setup[/][color(245)] to resume.[/]\n"
             )
         else:
@@ -872,37 +908,60 @@ def show_config(con: Console | None = None) -> None:
         con.print(f"  [color(245)]Looked in: {', '.join(str(p) for p in CONFIG_PATHS)}[/]\n")
         return
 
-    profile = config.get("profile") or {}
-    label = get_profile_label(config)
-
     config_path = next((p for p in CONFIG_PATHS if p.is_file()), None)
+    label = get_profile_label(config)
 
     t = Table(box=None, show_header=False, padding=(0, 2))
     t.add_column(style="color(245)", no_wrap=True, min_width=22)
     t.add_column(style="color(220)")
 
-    t.add_row("Profile name",  profile.get("name", "—"))
-    t.add_row("Industry",      profile.get("industry", "—"))
-    t.add_row("HQ region",     profile.get("hq_region", "—"))
-    t.add_row("Customers",     ", ".join(profile.get("customer_regions") or []))
-    t.add_row("Regulations",   ", ".join(profile.get("regulations") or []))
-    t.add_row("Risk appetite", (profile.get("risk_appetite") or "—").capitalize())
-    t.add_row("DPO present",   "Yes" if profile.get("dpo_present") else "No")
-    t.add_row("PHI in scope",  "Yes" if profile.get("phi_in_scope") else "No")
-    t.add_row("PCI in scope",  "Yes" if profile.get("pci_in_scope") else "No")
-    t.add_row("AI vendors",    "Yes" if profile.get("ai_vendors") else "No")
-    t.add_row("Config file",   str(config_path) if config_path else "—")
+    # Support both old (profile.*) and new (company.*) format
+    company = config.get("company") or {}
+    profile = config.get("profile") or {}
+    data_types = config.get("data_types") or {}
+    frameworks_cfg = config.get("frameworks") or {}
+
+    org_type = company.get("org_type") or profile.get("industry") or "—"
+    locations_raw = company.get("locations") or []
+    hq_region = profile.get("hq_region") or ""
+    locations_str = ", ".join(locations_raw) if locations_raw else hq_region or "—"
+    inferred = frameworks_cfg.get("inferred") or profile.get("regulations") or []
+    risk_app = config.get("risk_appetite") or profile.get("risk_appetite") or "—"
+
+    t.add_row("Organisation type", org_type)
+    t.add_row("Locations",         locations_str)
+    t.add_row("Risk appetite",     str(risk_app).capitalize())
+    if inferred:
+        t.add_row("Frameworks",    ", ".join(inferred))
+    certs = frameworks_cfg.get("certifications_required") or []
+    if certs:
+        t.add_row("Required certs", ", ".join(certs))
+    # Data types
+    dt_active = [k for k, v in data_types.items() if v]
+    if not dt_active and profile:
+        if profile.get("phi_in_scope"):  dt_active.append("phi")
+        if profile.get("pci_in_scope"):  dt_active.append("pci")
+    _dt_labels = {
+        "phi": "PHI / Medical", "pci": "Payment card",
+        "children": "Children's data", "biometric": "Biometric",
+        "hr_data": "Employee / HR", "special_categories": "Special categories",
+    }
+    if dt_active:
+        t.add_row("Sensitive data", ", ".join(_dt_labels.get(k, k) for k in dt_active))
+    t.add_row("Config file", str(config_path) if config_path else "—")
 
     con.print()
     con.print(Panel(t, title=f"[bold color(172)]BANDIT PROFILE — {label or 'Active'}[/]", border_style="color(238)"))
 
+    # Weights
     wt = Table(box=None, show_header=True, padding=(0, 2))
     wt.add_column("Dim",        style="bold color(172)", no_wrap=True)
     wt.add_column("Weight",     justify="right")
     wt.add_column("vs default", justify="right", style="color(245)")
 
     _default = {"D1": 1.0, "D2": 1.0, "D3": 1.0, "D4": 1.0, "D5": 1.0, "D6": 1.5, "D7": 1.0, "D8": 1.5}
-    profile_weights = profile.get("weights") or {}
+    # Support both new (dimension_weights) and old (profile.weights) format
+    profile_weights = config.get("dimension_weights") or profile.get("weights") or {}
     for dim_key in ["D1","D2","D3","D4","D5","D6","D7","D8"]:
         pw = float(profile_weights.get(dim_key, _default[dim_key]))
         dw = _default[dim_key]

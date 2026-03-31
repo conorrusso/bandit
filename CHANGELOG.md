@@ -10,6 +10,46 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## 2026-03-29 (latest)
+
+### Added — `(this session)`
+
+#### Setup wizard — inference-based, 5+3 questions
+- `bandit setup` completely rewritten: 5 core questions + up to 3 conditional (was 26 questions across 6 sections).
+- **Inference engine** — `_infer_frameworks()`, `_infer_weights()`, `_infer_reassessment()`, `_infer_escalation()` derive frameworks, weights, cadence, and escalation triggers automatically from answers.
+- **New question flow**: Q1 org type → Q2 locations → Q3 sensitive data → Q4 certifications → Q5 risk approach → [Q6 infra location if EU] → [Q7 BAA if PHI] → [Q8 PCI level if payment card].
+- **Review screen** shows inferred profile (frameworks, weights, schedule, escalation) with Y/n/edit choice before writing config.
+- **`bandit setup --advanced`** — prints "coming soon" message for future direct weight/cadence editing.
+
+#### New config YAML format
+- Config now uses structured sections: `company`, `data_types`, `frameworks`, `risk_appetite`, `reassessment`, `document_requirements`, `dimension_weights`, `auto_escalate`.
+- `core/config.py` `get_weights()` and `get_profile_label()` updated to support both new and legacy formats.
+
+#### Vendor function profiling system (`core/profiles/`)
+- `core/profiles/vendor_functions.py` — `VendorFunction` enum (14 categories) + `FUNCTION_MODIFIERS` dict with weight deltas and document expectations per function.
+- `core/profiles/auto_detect.py` — `VendorAutoDetector` with 4-stage detection: known vendor library → domain match → keyword inference → unknown fallback.
+- `core/profiles/vendor_cache.py` — `VendorProfileCache` for persistent profiles in `~/.bandit/vendor-profiles.json` (atomic writes).
+- `core/profiles/__init__.py` — package init.
+
+#### BanditConfig class
+- `core/config.py`: `BanditConfig` class — structured accessor with `get_weights(vendor_functions=...)`, `get_auto_escalate_triggers()`, `get_reassessment(tier)`, `is_auto_escalate(result)`, `get_frameworks()`, `get_required_documents()`, `get_certifications_required()`.
+
+#### `bandit profile` command
+- New `bandit profile <vendor>` command — shows vendor function detection result, confidence, weight modifiers, and document requirements.
+- `bandit profile --show` — lists all cached vendor profiles.
+- `bandit profile --unknown` — filters for vendors without a confirmed function classification.
+
+#### Evidence confidence scoring
+- `PrivacyBandit._calculate_evidence_confidence()` — 0.0–1.0 score based on text length and presence of privacy policy content indicators.
+- Auto-detection wired into `bandit assess` — vendor function profiles cached after each assessment.
+
+### Changed — `(this session)`
+- `cli/main.py` `setup` command updated to pass `--advanced` flag to `run_wizard()`.
+- `cli/welcome.py` — added `bandit profile` to COMMANDS panel.
+- README.md, docs/setup-guide.md, docs/cli-reference.md updated to reflect new wizard and profile system.
+
+---
+
 ## 2026-03-29 (evening)
 
 ### Changed — `3f93763`

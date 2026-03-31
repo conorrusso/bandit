@@ -118,7 +118,14 @@ def main(ctx: click.Context) -> None:
 @click.option("--json", "output_json", is_flag=True, help="Print JSON to terminal (report still saved)")
 @click.option("-v", "--verbose", is_flag=True, help="Show discovery stages and extra detail")
 @click.option("--no-report", is_flag=True, help="Skip saving the HTML report")
-@click.option("--dpa", default=None, metavar="PATH", help="Path to vendor DPA document (PDF or text)")
+@click.option(
+    "--docs",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    metavar="PATH",
+    help="Path to folder containing vendor documents (DPA, MSA, SOC 2, etc.)",
+)
+@click.option("--drive", is_flag=True, default=False, help="Fetch vendor documents from configured Google Drive folder")
 @click.option("--force", is_flag=True, help="Run assessment even if cadence says not due")
 def assess(
     vendor: tuple,
@@ -127,7 +134,8 @@ def assess(
     output_json: bool,
     verbose: bool,
     no_report: bool,
-    dpa: str | None,
+    docs: str | None,
+    drive: bool,
     force: bool,
 ) -> None:
     """Assess a vendor's privacy practices.
@@ -139,21 +147,15 @@ def assess(
     Examples:
       bandit assess "Salesforce"
       bandit assess hubspot.com --verbose
+      bandit assess "Acme Corp" --docs ./vendor-docs/acme/
+      bandit assess "Acme Corp" --drive
       bandit assess "Acme Corp" --json > acme.json
-      bandit assess "Acme Corp" --no-report
     """
     import datetime
     from cli.terminal import assessment_progress, console, print_assessment
     from core.agents.privacy_bandit import PrivacyBandit
     from core.llm.anthropic import AnthropicProvider
     from core.scoring.rubric import result_to_dict
-
-    if dpa:
-        console.print(
-            "\n  [color(245)]DPA assessment coming soon —[/] "
-            "[color(172)]Google Drive integration will enable document-based scoring.[/]\n"
-        )
-        return
 
     if not api_key:
         console.print(
@@ -237,16 +239,55 @@ def assess(
 
     provider = AnthropicProvider(model=model, api_key=api_key)
 
+    # Resolve docs folder — Drive download if --drive
+    docs_folder = docs
+    _drive_tmp = None
+    if drive and not docs_folder:
+        try:
+            from core.integrations.drive_ingestor import DriveDocumentIngestor
+            from core.config import load_config
+            _cfg = load_config() or {}
+            _drive_cfg = _cfg.get("integrations", {}).get("google_drive", {})
+            _folder_id = _drive_cfg.get("root_folder_id")
+            if not _folder_id:
+                console.print(
+                    "\n  [color(196)]✗[/]  [color(245)]Google Drive not configured. "
+                    "Run [color(220)]bandit setup --drive[/][color(245)] first.[/]\n"
+                )
+                sys.exit(1)
+            import tempfile
+            _drive_tmp = tempfile.mkdtemp(prefix="bandit_drive_")
+            from core.integrations.google_drive import GoogleDriveClient
+            _drive_client = GoogleDriveClient()
+            _drive_client.authenticate()
+            _local_paths = _drive_client.download_vendor_documents(
+                vendor_name=vendor_str,
+                parent_folder_id=_folder_id,
+                temp_dir=_drive_tmp,
+            )
+            if _local_paths:
+                docs_folder = _drive_tmp
+            else:
+                console.print(
+                    f"  [color(245)]No Drive documents found for {vendor_str}.[/]"
+                )
+        except Exception as exc:
+            console.print(f"  [color(245)]Drive integration error: {exc}[/]")
+
     try:
         with assessment_progress(verbose=verbose) as update:
             bandit = PrivacyBandit(provider=provider, on_progress=update)
-            assessment = bandit.assess(vendor_str)
+            assessment = bandit.assess(vendor_str, docs_folder=docs_folder)
     except KeyboardInterrupt:
         console.print("\n  [bold color(196)]✗[/]  [color(245)]Assessment cancelled.[/]")
         sys.exit(0)
     except Exception as exc:
         console.print(f"[bold red]Error:[/] {exc}")
         sys.exit(1)
+    finally:
+        if _drive_tmp:
+            import shutil
+            shutil.rmtree(_drive_tmp, ignore_errors=True)
 
     # ── Terminal output ───────────────────────────────────────────────
     if output_json:
@@ -395,25 +436,33 @@ def rubric(dim: str | None) -> None:
 # ─────────────────────────────────────────────────────────────────────
 
 @main.command()
-@click.option("--reset", is_flag=True, help="Overwrite existing config and start fresh")
-@click.option("--show",  is_flag=True, help="Print current config summary and exit")
-def setup(reset: bool, show: bool) -> None:
+@click.option("--reset",    is_flag=True, help="Overwrite existing config and start fresh")
+@click.option("--show",     is_flag=True, help="Print current config summary and exit")
+@click.option("--advanced", is_flag=True, help="Advanced configuration (coming soon)")
+@click.option("--drive",    is_flag=True, help="Configure Google Drive integration")
+def setup(reset: bool, show: bool, advanced: bool, drive: bool) -> None:
     """Configure your industry and regulatory profile.
 
-    Runs an 18-question wizard that calculates dimension weights based
-    on your regulatory environment and data risk profile. Saves to
-    ./bandit.config.yml.
+    Runs a short wizard (5 core + up to 3 conditional questions) that
+    infers frameworks and dimension weights for your context.
+    Saves to ./bandit.config.yml.
 
     \b
     Examples:
       bandit setup
       bandit setup --reset
       bandit setup --show
+      bandit setup --drive
+      bandit setup --advanced
     """
     from rich.console import Console
     from cli.setup import run_wizard, show_config
 
     con = Console()
+
+    if drive:
+        _run_drive_setup(con)
+        return
 
     if show:
         show_config(con)
@@ -429,7 +478,7 @@ def setup(reset: bool, show: bool) -> None:
                 break
 
     try:
-        run_wizard(con, reset=reset)
+        run_wizard(con, reset=reset, advanced=advanced)
     except KeyboardInterrupt:
         con.print("\n  [bold color(196)]✗[/]  [color(245)]Setup cancelled.[/]\n")
         sys.exit(0)
@@ -437,6 +486,97 @@ def setup(reset: bool, show: bool) -> None:
         con.print(f"\n  [bold color(196)]✗[/]  [color(245)]Setup error: {exc}[/]")
         con.print("  [dim color(245)]Run [color(220)]bandit setup[/][dim color(245)] to try again.[/]\n")
         sys.exit(1)
+
+
+def _run_drive_setup(con) -> None:
+    """Interactive Google Drive setup wizard."""
+    import pathlib
+    import shutil
+
+    con.print("\n  [bold color(172)]GOOGLE DRIVE SETUP[/]\n")
+
+    # Step 1 — Credentials
+    con.print("  [bold]Step 1[/] — Download credentials")
+    con.print("  [color(245)]Google Drive integration requires a credentials file.[/]\n")
+    con.print("  [color(245)]1. Go to console.cloud.google.com[/]")
+    con.print("  [color(245)]2. Create a project (or select existing)[/]")
+    con.print("  [color(245)]3. Enable Google Drive API[/]")
+    con.print("  [color(245)]4. Create OAuth 2.0 credentials (Desktop app)[/]")
+    con.print("  [color(245)]5. Download credentials.json[/]\n")
+
+    creds_input = con.input(
+        "  [color(220)]Path to your credentials.json file:[/] "
+    ).strip()
+    if not creds_input:
+        con.print("  [color(196)]✗[/]  No path provided.\n")
+        return
+
+    creds_src = pathlib.Path(creds_input).expanduser()
+    if not creds_src.exists():
+        con.print(f"  [color(196)]✗[/]  File not found: {creds_src}\n")
+        return
+
+    creds_dest = pathlib.Path.home() / ".bandit" / "google-credentials.json"
+    creds_dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(creds_src, creds_dest)
+    con.print(f"  [color(82)]✓[/]  Credentials saved to {creds_dest}\n")
+
+    # Step 2 — Authenticate
+    con.print("  [bold]Step 2[/] — Authenticate")
+    con.print("  [color(245)]Opening browser for Google authorization…[/]\n")
+    try:
+        from core.integrations.google_drive import GoogleDriveClient
+        client = GoogleDriveClient()
+        client.authenticate()
+        con.print("  [color(82)]✓[/]  Authenticated successfully\n")
+    except ImportError:
+        con.print(
+            "  [color(220)]⚠[/]  google-auth packages not installed.\n"
+            "  Install with: [color(220)]pip install -e \".[drive]\"[/]\n"
+        )
+        return
+    except Exception as exc:
+        con.print(f"  [color(196)]✗[/]  Authentication failed: {exc}\n")
+        return
+
+    # Step 3 — Configure folder
+    con.print("  [bold]Step 3[/] — Configure folder")
+    con.print("  [color(245)]Paste your Bandit Drive folder ID:[/]")
+    con.print("  [color(245)](The ID is in the URL: drive.google.com/drive/folders/FOLDER_ID)[/]\n")
+    folder_id = con.input("  [color(220)]Folder ID:[/] ").strip()
+    if not folder_id:
+        con.print("  [color(196)]✗[/]  No folder ID provided.\n")
+        return
+
+    # Step 4 — Verify
+    con.print("\n  [bold]Step 4[/] — Verify")
+    con.print("  [color(245)]Scanning folder…[/]")
+    try:
+        folders = client.list_vendor_folders(folder_id)
+        con.print(f"  [color(82)]✓[/]  Found {len(folders)} vendor subfolder(s)\n")
+    except Exception as exc:
+        con.print(f"  [color(220)]⚠[/]  Could not scan folder: {exc}\n")
+
+    # Save to config
+    from core.config import load_config
+    import yaml
+    config_path = pathlib.Path("bandit.config.yml")
+    cfg = load_config() or {}
+    cfg.setdefault("integrations", {})["google_drive"] = {
+        "enabled": True,
+        "root_folder_id": folder_id,
+        "credentials_path": str(creds_dest),
+        "auto_save_reports": True,
+    }
+    try:
+        config_path.write_text(yaml.dump(cfg, default_flow_style=False, allow_unicode=True))
+        con.print(f"  [color(82)]✓[/]  Drive integration configured\n")
+    except Exception:
+        con.print("  [color(245)]Could not save config. Add manually to bandit.config.yml[/]\n")
+
+    con.print("  [bold]Usage:[/]")
+    con.print('  [color(220)]bandit assess "Salesforce" --drive[/]')
+    con.print("  [color(220)]bandit batch vendors.txt --drive[/]\n")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -457,15 +597,33 @@ def setup(reset: bool, show: bool) -> None:
     "--out-dir", default="reports", metavar="DIR", show_default=True,
     help="Directory to save HTML reports",
 )
-def batch(file: str, model: str, api_key: str | None, out_dir: str) -> None:
+@click.option(
+    "--docs-root",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    metavar="DIR",
+    help="Root folder containing vendor subfolders (./docs-root/<vendor-name>/)",
+)
+@click.option("--drive", is_flag=True, default=False, help="Fetch vendor documents from Google Drive for each vendor")
+def batch(
+    file: str,
+    model: str,
+    api_key: str | None,
+    out_dir: str,
+    docs_root: str | None,
+    drive: bool,
+) -> None:
     """Assess a list of vendors from a text file.
 
-    FILE should contain one vendor (name, domain, or URL) per line.
+    FILE should contain one vendor per line (name, domain, or URL).
+    Optionally add columns: vendor, URL, functions, docs_path.
     Lines starting with # and blank lines are ignored.
 
     \b
-    Example:
+    Examples:
       bandit batch vendors.txt
+      bandit batch vendors.txt --docs-root ./vendor-docs/
+      bandit batch vendors.txt --drive
     """
     import datetime
     import pathlib
@@ -486,18 +644,24 @@ def batch(file: str, model: str, api_key: str | None, out_dir: str) -> None:
         )
         sys.exit(1)
 
-    vendors = []
+    # Parse vendors file — supports up to 4 columns:
+    # vendor_name, optional_url, optional_functions, optional_docs_path
+    vendor_entries = []  # list of (vendor_name, docs_path)
     with open(file) as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith("#"):
-                vendors.append(line)
+            if not line or line.startswith("#"):
+                continue
+            parts = [col.strip() for col in line.split(",")]
+            vendor_name = parts[0]
+            docs_path = parts[3] if len(parts) >= 4 and parts[3] else None
+            vendor_entries.append((vendor_name, docs_path))
 
-    if not vendors:
+    if not vendor_entries:
         con.print("[yellow]No vendors found in file.[/]")
         sys.exit(0)
 
-    con.print(f"\n[bold color(172)]BANDIT BATCH[/]  [color(243)]{len(vendors)} vendor(s) from {file}[/]\n")
+    con.print(f"\n[bold color(172)]BANDIT BATCH[/]  [color(243)]{len(vendor_entries)} vendor(s) from {file}[/]\n")
 
     out_path = pathlib.Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -506,13 +670,62 @@ def batch(file: str, model: str, api_key: str | None, out_dir: str) -> None:
     date = datetime.date.today().isoformat()
     results = []   # (vendor, tier, score, report_path, error)
 
+    # Pre-authenticate Drive if needed
+    _drive_client = None
+    _drive_folder_id = None
+    if drive:
+        try:
+            from core.integrations.google_drive import GoogleDriveClient
+            from core.config import load_config
+            _cfg = load_config() or {}
+            _drive_folder_id = _cfg.get("integrations", {}).get("google_drive", {}).get("root_folder_id")
+            if not _drive_folder_id:
+                con.print(
+                    "\n  [color(196)]✗[/]  [color(245)]Google Drive not configured. "
+                    "Run [color(220)]bandit setup --drive[/][color(245)] first.[/]\n"
+                )
+                sys.exit(1)
+            _drive_client = GoogleDriveClient()
+            _drive_client.authenticate()
+        except Exception as exc:
+            con.print(f"  [color(245)]Drive authentication error: {exc}[/]")
+            _drive_client = None
+
     try:
-        for i, vendor in enumerate(vendors, 1):
-            con.print(f"[color(245)][{i}/{len(vendors)}][/]  [color(220)]{vendor}[/]")
+        for i, (vendor, inline_docs) in enumerate(vendor_entries, 1):
+            con.print(f"[color(245)][{i}/{len(vendor_entries)}][/]  [color(220)]{vendor}[/]")
+
+            # Resolve docs folder for this vendor
+            docs_folder = inline_docs
+            _tmp_dir = None
+
+            if not docs_folder and docs_root:
+                import re as _re
+                slug = _re.sub(r"[^a-z0-9-]", "-", vendor.lower().strip()).strip("-")
+                _root = pathlib.Path(docs_root)
+                for candidate in [_root / vendor, _root / slug, _root / vendor.lower()]:
+                    if candidate.is_dir():
+                        docs_folder = str(candidate)
+                        break
+
+            if not docs_folder and drive and _drive_client and _drive_folder_id:
+                try:
+                    import tempfile
+                    _tmp_dir = tempfile.mkdtemp(prefix="bandit_drive_")
+                    _paths = _drive_client.download_vendor_documents(
+                        vendor_name=vendor,
+                        parent_folder_id=_drive_folder_id,
+                        temp_dir=_tmp_dir,
+                    )
+                    if _paths:
+                        docs_folder = _tmp_dir
+                except Exception:
+                    pass
+
             try:
                 with assessment_progress() as update:
                     bandit = PrivacyBandit(provider=provider, on_progress=update)
-                    assessment = bandit.assess(vendor)
+                    assessment = bandit.assess(vendor, docs_folder=docs_folder)
 
                 result = assessment.result
                 report_file = out_path / f"{_vendor_slug(vendor)}-{date}.html"
@@ -532,12 +745,17 @@ def batch(file: str, model: str, api_key: str | None, out_dir: str) -> None:
             except Exception as exc:
                 results.append((vendor, "ERROR", 0.0, "", str(exc)))
                 con.print(f"    [bold red]ERROR:[/] {exc}")
+            finally:
+                if _tmp_dir:
+                    import shutil
+                    shutil.rmtree(_tmp_dir, ignore_errors=True)
     except KeyboardInterrupt:
         completed = len(results)
-        remaining = vendors[completed:]
+        all_vendor_names = [v for v, _ in vendor_entries]
+        remaining = all_vendor_names[completed:]
         con.print(
             f"\n  [bold color(196)]✗[/]  "
-            f"[color(245)]Batch cancelled after {completed}/{len(vendors)} vendors.[/]"
+            f"[color(245)]Batch cancelled after {completed}/{len(vendor_entries)} vendors.[/]"
         )
         if completed > 0:
             con.print(f"     [color(243)]Completed reports saved to {out_dir}/[/]")
@@ -564,10 +782,140 @@ def batch(file: str, model: str, api_key: str | None, out_dir: str) -> None:
 
     con.print(Panel(
         t,
-        title=f"[bold color(172)]BATCH SUMMARY — {len(vendors)} vendor(s)[/]",
+        title=f"[bold color(172)]BATCH SUMMARY — {len(vendor_entries)} vendor(s)[/]",
         border_style="color(238)",
     ))
     con.print()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# profile
+# ─────────────────────────────────────────────────────────────────────
+
+@main.command()
+@click.argument("vendor", required=False, default=None)
+@click.option("--show",    is_flag=True, help="List all cached vendor profiles")
+@click.option("--unknown", is_flag=True, help="Show vendors with unknown function classification")
+def profile(vendor: str | None, show: bool, unknown: bool) -> None:
+    """Manage and inspect vendor function profiles.
+
+    Auto-detects what category a vendor belongs to (HR, payments, AI/ML, etc.)
+    and shows the weight modifiers and document requirements that apply.
+
+    \b
+    Examples:
+      bandit profile "Salesforce"
+      bandit profile salesforce.com
+      bandit profile --show
+      bandit profile --unknown
+    """
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from core.profiles.auto_detect import detector
+    from core.profiles.vendor_cache import profile_cache
+    from core.profiles.vendor_functions import FUNCTION_LABELS, FUNCTION_MODIFIERS
+
+    con = Console()
+
+    if show or (not vendor and not unknown):
+        profiles = profile_cache.list_all()
+        if not profiles:
+            con.print("\n  [color(245)]No cached vendor profiles yet.[/]")
+            con.print("  [color(245)]Run [color(220)]bandit assess <vendor>[/][color(245)] to build up the cache.[/]\n")
+            return
+        t = Table(box=None, show_header=True, padding=(0, 2))
+        t.add_column("Vendor",     style="color(250)", min_width=20)
+        t.add_column("Functions",  style="color(245)")
+        t.add_column("Method",     style="color(243)", no_wrap=True)
+        t.add_column("Updated",    style="color(243)", no_wrap=True)
+        for p in profiles:
+            if unknown and p.detection_method != "unknown":
+                continue
+            t.add_row(
+                p.vendor_name,
+                ", ".join(p.function_labels()),
+                p.detection_method,
+                p.last_updated,
+            )
+        con.print(Panel(
+            t,
+            title=f"[bold color(172)]VENDOR PROFILES[/]  [color(243)]({len(profiles)} cached)[/]",
+            border_style="color(238)",
+        ))
+        return
+
+    if unknown:
+        profiles = profile_cache.list_all()
+        unknown_profiles = [p for p in profiles if p.detection_method == "unknown"]
+        if not unknown_profiles:
+            con.print("\n  [color(82)]✓[/]  [color(245)]No vendors with unknown classification.[/]\n")
+        else:
+            con.print(f"\n  [color(220)]{len(unknown_profiles)} vendor(s) with unknown function:[/]")
+            for p in unknown_profiles:
+                con.print(f"  [color(245)]  •  {p.vendor_name}[/]")
+        return
+
+    if vendor:
+        # Check cache first
+        cached = profile_cache.get(vendor)
+        if cached:
+            result_functions = [f for f in cached.functions]
+            method = cached.detection_method
+            confidence = 1.0 if method == "known_vendor" else 0.9 if method == "domain_match" else 0.6 if method == "keyword" else 0.0
+        else:
+            detect_result = detector.detect(vendor)
+            result_functions = [f.value for f in detect_result.functions]
+            method = detect_result.method
+            confidence = detect_result.confidence
+
+        # Display
+        fn_table = Table(box=None, show_header=True, padding=(0, 2))
+        fn_table.add_column("Function",  style="bold color(172)", min_width=24)
+        fn_table.add_column("Weight modifiers", style="color(250)")
+        fn_table.add_column("Expected docs",    style="color(245)")
+
+        try:
+            from core.profiles.vendor_functions import VendorFunction
+            fns = [VendorFunction(f) for f in result_functions]
+        except (ValueError, ImportError):
+            fns = []
+
+        for fn in fns:
+            mods = FUNCTION_MODIFIERS.get(fn, {})
+            wm = mods.get("weight_modifiers", {})
+            wm_str = "  ".join(f"{d}+{v}" for d, v in wm.items()) if wm else "—"
+            docs = ", ".join(mods.get("expected_docs", [])) or "—"
+            fn_table.add_row(FUNCTION_LABELS.get(fn, fn.value), wm_str, docs)
+
+        conf_style = "color(82)" if confidence >= 0.9 else "color(220)" if confidence >= 0.6 else "color(245)"
+        conf_label = f"[{conf_style}]{confidence:.0%}[/]  [color(243)]({method})[/]"
+
+        con.print()
+        con.print(Panel(
+            fn_table,
+            title=f"[bold color(172)]{vendor}[/]  [color(243)]Confidence: {conf_label}[/]",
+            border_style="color(238)",
+        ))
+
+        # Show required docs
+        try:
+            from core.profiles.vendor_functions import get_required_docs, get_expected_docs
+            req_docs = get_required_docs(fns)
+            exp_docs = get_expected_docs(fns)
+            if req_docs or exp_docs:
+                doc_t = Table(box=None, show_header=False, padding=(0, 2))
+                doc_t.add_column(style="color(245)", min_width=18)
+                doc_t.add_column(style="color(220)")
+                if req_docs:
+                    doc_t.add_row("Required", ", ".join(req_docs))
+                if exp_docs:
+                    doc_t.add_row("Expected", ", ".join(exp_docs))
+                con.print(Panel(doc_t, title="[bold color(172)]DOCUMENT REQUIREMENTS[/]", border_style="color(238)"))
+        except ImportError:
+            pass
+        con.print()
 
 
 # ─────────────────────────────────────────────────────────────────────

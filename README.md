@@ -42,22 +42,24 @@ bandit setup
 bandit assess "Salesforce"
 ```
 
-`bandit setup` takes about 5 minutes and adjusts dimension weights for your industry, regulatory context, and data risk profile. If you run `bandit assess` without a config, Bandit will prompt you to run setup before starting — you can set up inline or skip and assess with default weights.
+`bandit setup` takes about 2 minutes (5 core questions + up to 3 conditional). It infers your applicable frameworks automatically and adjusts dimension weights for your context. If you run `bandit assess` without a config, Bandit will prompt you to run setup before starting — you can set up inline or skip and assess with default weights.
 
 ---
 
 ## Usage
 
 ```
-bandit assess <vendor>         Run a full privacy risk assessment
-bandit assess <vendor> -v      Verbose — see fetched pages and signals
-bandit assess <vendor> --json  Output raw JSON
-bandit batch <vendors.txt>     Assess a full vendor list
-bandit rubric                  Show the scoring rubric summary
-bandit rubric --dim D5         Show criteria for one dimension
-bandit setup                   Configure your industry and regulatory profile
-bandit setup --show            Show current profile
-bandit setup --reset           Start setup over
+bandit assess <vendor>           Run a full privacy risk assessment
+bandit assess <vendor> -v        Verbose — see fetched pages and signals
+bandit assess <vendor> --json    Output raw JSON
+bandit batch <vendors.txt>       Assess a full vendor list
+bandit profile <vendor>          Show vendor function profile and doc requirements
+bandit profile --show            List all cached vendor profiles
+bandit rubric                    Show the scoring rubric summary
+bandit rubric --dim D5           Show criteria for one dimension
+bandit setup                     Configure your industry and regulatory profile
+bandit setup --show              Show current profile
+bandit setup --reset             Start setup over
 ```
 
 ### Input formats
@@ -106,6 +108,8 @@ bandit assess "Acme Corp" --verbose                  # show all stages
 bandit assess "Acme Corp" --json > acme.json         # raw JSON output
 bandit assess "Acme Corp" --no-report                # skip HTML report
 bandit assess "Acme Corp" --model claude-opus-4-6    # override model
+bandit assess "Acme Corp" --docs ./vendor-docs/acme/ # with documents
+bandit assess "Acme Corp" --drive                    # from Google Drive
 ```
 
 | Flag | Description |
@@ -115,32 +119,47 @@ bandit assess "Acme Corp" --model claude-opus-4-6    # override model
 | `--no-report` | Skip saving the HTML report |
 | `--model MODEL` | Override the LLM model |
 | `--api-key KEY` | Provide API key directly (default: env var) |
+| `--docs PATH` | Folder containing vendor documents (DPA, MSA, SOC 2, etc.) |
+| `--drive` | Fetch vendor documents from configured Google Drive folder |
 
 ### bandit setup
 
-Run the interactive setup wizard. Configures Bandit for your industry, regulatory frameworks, data types, and company location. Saves to `bandit.config.yml`.
+Run the interactive setup wizard. 5 core questions + up to 3 conditional. Infers regulatory frameworks automatically and adjusts dimension weights. Saves to `bandit.config.yml`.
 
 ```bash
-bandit setup           # Run full wizard
-bandit setup --show    # Show current config
-bandit setup --reset   # Start over
+bandit setup            # Run wizard (~2 minutes)
+bandit setup --show     # Show current config
+bandit setup --reset    # Start over
+bandit setup --advanced # Advanced config (coming soon)
 ```
 
-The wizard asks about:
-- Where your company operates and where customers are located
-- Your industry
-- Data types processed (PHI, PCI, children's data, special categories)
-- Applicable regulatory frameworks (GDPR, HIPAA, CCPA, PCI-DSS, etc.)
-- Risk appetite and escalation thresholds
-- Team routing (DPO, Legal, Security)
+The wizard asks:
+1. **Organisation type** — sets industry-specific defaults
+2. **Locations** — where you and your customers operate
+3. **Sensitive data types** — PHI, PCI, children's data, biometric, HR, special categories
+4. **Required certifications** — SOC 2, HIPAA BAA, GDPR DPA, PCI AOC, etc.
+5. **Risk approach** — Strict / Standard / Pragmatic (sets cadence and escalation)
 
-Based on your answers, Bandit automatically adjusts:
-- Dimension weights for your regulatory context
-- Auto-escalation triggers
-- Contract recommendations citing relevant frameworks
-- Team routing in reports
+Conditional (asked only when relevant):
+- **Infrastructure location** (if EU/EEA in locations) — affects D4 cross-border transfer weight
+- **BAA required** (if PHI selected) — HIPAA Business Associate Agreement requirement
+- **PCI merchant level** (if payment card selected) — Level 1/2/3
+
+Bandit then **infers**: applicable frameworks (GDPR, HIPAA, CCPA, etc.), dimension weights, reassessment cadence, and escalation triggers — all shown for review before saving.
 
 If no config exists, Bandit prompts you to run setup before the assessment starts. You can set up inline, skip it, or quit.
+
+### bandit profile
+
+Show the vendor function profile for any vendor — what category it belongs to, weight modifiers that apply, and documents expected.
+
+```bash
+bandit profile "Salesforce"    # Detect and show profile
+bandit profile --show          # List all cached profiles
+bandit profile --unknown       # Show vendors with unknown classification
+```
+
+Bandit auto-detects vendor functions (HR, payments, AI/ML, healthcare, etc.) using a curated library of 330+ vendors. If detection confidence is below 0.6, you'll be prompted to confirm during `bandit assess`.
 
 ### bandit batch
 
@@ -179,23 +198,74 @@ Bandit v1.0 assesses public privacy policies only.
 
 Different documents reveal different information:
 
-| Document | Available | Dimensions unlocked |
-|----------|-----------|---------------------|
-| Public privacy policy | Always | D1, D3, D6, D7 fully · D2, D4, D5 partially |
-| DPA | On request | D8 fully · D2/D4/D5 complete |
-| MSA | On request | D5 contractual SLA |
-| SOC 2 Type II | On request | D2, D5, D7, D8 supplemented |
-| BAA (healthcare) | On request | D5 HIPAA timeline |
+| Document | Dimensions unlocked |
+|----------|---------------------|
+| Public policy only | D1, D3, D6, D7 fully · D2, D4, D5 partially · D8 not assessed |
+| + DPA | D8 fully · D2/D4/D5 complete |
+| + BAA (healthcare) | D5 HIPAA timeline |
+| + SOC 2 Type II | D2, D5, D7, D8 supplemented |
+| + AI Policy | D6 deep assessment |
+| + Sub-processor list | D2 complete |
 
-Google Drive and local folder document support is coming in v1.1 — this will unlock full scoring across all 8 dimensions.
+## Document sources
 
-Until then, provide documents directly:
+Bandit v1.1 adds local folder and Google Drive support, unlocking full scoring across all 8 dimensions.
 
-```bash
-bandit assess "Vendor" --url https://vendor.com/privacy
+### Local folder
+
+Create a folder structure with vendor subfolders:
+
+```
+vendor-docs/
+├── Salesforce/
+│   ├── dpa.pdf
+│   ├── msa.pdf
+│   └── soc2-2025.pdf
+└── HubSpot/
+    └── dpa.pdf
 ```
 
-(`--dpa` and `--docs` flags coming in v1.1)
+Run with documents:
+
+```bash
+bandit assess "Salesforce" --docs ./vendor-docs/Salesforce/
+bandit batch vendors.txt --docs-root ./vendor-docs/
+```
+
+### Google Drive
+
+Set up Drive integration once:
+
+```bash
+bandit setup --drive
+```
+
+Then use `--drive` in any assessment:
+
+```bash
+bandit assess "Salesforce" --drive
+bandit batch vendors.txt --drive
+```
+
+Bandit reads documents from Drive and optionally saves HTML reports back to the vendor folder.
+
+### Supported document types
+
+Bandit auto-detects and extracts signals from:
+DPA · MSA · BAA · SOC 2 Type II · SOC 1 Type II · ISO 27001/27701/42001 · HITRUST · PCI AOC · AI Policy · Model Card · Sub-processor List · TIA · FedRAMP ATO · and more (47 document types total)
+
+**Supported file formats:** PDF · DOCX · HTML · TXT · MD · JSON
+
+### vendors.txt — extended format
+
+The batch file supports optional columns for functions and docs path:
+
+```
+# vendor, url (optional), functions (optional), docs_path (optional)
+Salesforce,,customer_data,./docs/salesforce/
+NetSuite,,financial_processing,./docs/netsuite/
+HubSpot
+```
 
 ---
 
@@ -277,7 +347,7 @@ Discovered domain→URL mappings are cached in `~/.bandit/domain-cache.json`.
 ## Roadmap
 
 **v1.0 — Live**
-Privacy Bandit, CLI, HTML reports, setup profiles, assessment scope honesty, provider-agnostic.
+Privacy Bandit, CLI, HTML reports, setup profiles, assessment scope honesty, provider-agnostic. Vendor function profiling (330+ known vendors). Inference-based setup wizard.
 
 **v1.1 — Document Sources**
 Google Drive integration, local folder support, PDF parsing, full D8 scoring, multi-document assessment.

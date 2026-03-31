@@ -5,9 +5,12 @@
 | Command | What it does |
 |---------|-------------|
 | `bandit assess "Vendor"` | Assess a single vendor's privacy practices |
-| `bandit setup` | Run the setup wizard (configure weights & escalation) |
+| `bandit setup` | Run the setup wizard (~2 min, infers frameworks automatically) |
 | `bandit setup --show` | Print your current profile |
 | `bandit setup --reset` | Start the wizard over |
+| `bandit setup --advanced` | Advanced configuration (coming soon) |
+| `bandit profile "Vendor"` | Show vendor function profile and doc requirements |
+| `bandit profile --show` | List all cached vendor profiles |
 | `bandit batch vendors.txt` | Assess a list of vendors from a file |
 | `bandit rubric` | Show the full scoring rubric |
 | `bandit rubric --dim D6` | Show detail for one dimension |
@@ -71,7 +74,8 @@ bandit assess <vendor> [OPTIONS]
 | `-v`, `--verbose` | off | Show discovery stages, fetched pages, and signal detail |
 | `--no-report` | off | Skip saving the HTML report |
 | `--force` | off | Run assessment even if cadence says vendor is not due yet |
-| `--dpa PATH` | — | Path to vendor DPA document (coming in v1.1) |
+| `--docs PATH` | — | Folder containing vendor documents (DPA, MSA, SOC 2, etc.) |
+| `--drive` | off | Fetch vendor documents from configured Google Drive folder |
 
 **Examples**
 
@@ -82,13 +86,15 @@ bandit assess https://anecdotes.ai/privacy
 bandit assess "Acme Corp" --json > acme.json
 bandit assess "Acme Corp" --model claude-opus-4-6
 bandit assess "Acme Corp" --no-report
+bandit assess "Acme Corp" --docs ./vendor-docs/acme/
+bandit assess "Acme Corp" --drive
 ```
 
 ---
 
 ### `bandit setup`
 
-Run the interactive setup wizard. Configures dimension weights and escalation triggers for your industry and regulatory context. Saves to `./bandit.config.yml`.
+Run the interactive setup wizard. 5 core questions + up to 3 conditional. Automatically infers applicable frameworks (GDPR, HIPAA, CCPA, etc.) and calculates dimension weights. Saves to `./bandit.config.yml`.
 
 ```
 bandit setup [OPTIONS]
@@ -100,27 +106,71 @@ bandit setup [OPTIONS]
 |--------|-------------|
 | `--show` | Print current config summary and exit |
 | `--reset` | Remove existing config and start the wizard fresh |
+| `--drive` | Configure Google Drive integration |
+| `--advanced` | Advanced configuration (coming soon) |
 
 **Examples**
 
 ```bash
-bandit setup             # Run full wizard (~2 minutes)
-bandit setup --show      # Print current profile
-bandit setup --reset     # Start over
+bandit setup              # Run wizard (~2 minutes)
+bandit setup --show       # Print current profile
+bandit setup --reset      # Start over
+bandit setup --drive      # Configure Google Drive integration
+bandit setup --advanced   # Advanced mode (coming soon)
 ```
 
-The wizard covers 6 sections across 26 questions:
+The wizard asks:
+1. **Organisation type** — industry-specific defaults
+2. **Locations** — where you and your customers operate (biggest weight driver)
+3. **Sensitive data types** — PHI, PCI, children's, biometric, HR, special categories
+4. **Required certifications** — SOC 2, HIPAA BAA, GDPR DPA, PCI AOC, etc.
+5. **Risk approach** — Strict / Standard / Pragmatic (sets cadence and escalation thresholds)
 
-1. **Company location** — HQ region, customer regions, infrastructure regions
-2. **Industry** — 8 options including healthcare, finance, technology, retail
-3. **Data types** — PHI, PCI, children's data, special categories, AI vendors
-4. **Regulatory frameworks** — GDPR, HIPAA, CCPA, PCI-DSS, SOX, and others
-5. **Risk appetite** — escalation thresholds, AI flag escalation
-6. **Team context & reassessment** — reviewer, per-tier depth, cadence, and out-of-cycle triggers for HIGH / MEDIUM / LOW vendors
+Plus conditional questions about infrastructure location, BAA requirements, and PCI merchant level when relevant.
 
-After the wizard, Bandit shows a weight preview table and writes `bandit.config.yml` in the current directory.
+After the questions, Bandit shows an inferred profile for review (Y/n/edit) then writes `bandit.config.yml`.
 
 See [docs/setup-guide.md](setup-guide.md) for a question-by-question walkthrough.
+
+---
+
+### `bandit profile`
+
+Show or manage vendor function profiles. Auto-detects what category a vendor belongs to from a library of 330+ known vendors.
+
+```
+bandit profile [VENDOR] [OPTIONS]
+```
+
+**Arguments**
+
+| Argument | Description |
+|----------|-------------|
+| `[VENDOR]` | Vendor name, domain, or partial name (optional) |
+
+**Options**
+
+| Option | Description |
+|--------|-------------|
+| `--show` | List all cached vendor profiles |
+| `--unknown` | Show vendors with unknown function classification |
+
+**Examples**
+
+```bash
+bandit profile "Salesforce"   # Detect and show function profile
+bandit profile stripe.com     # Detect from domain
+bandit profile --show         # List all cached profiles
+bandit profile --unknown      # Find vendors that need manual classification
+```
+
+Bandit detects vendor functions through a 4-stage pipeline:
+1. Known vendor library (~330 vendors)
+2. Domain segment match
+3. Keyword inference from the vendor name
+4. Unknown → GENERAL_SAAS fallback
+
+Profiles are cached in `~/.bandit/vendor-profiles.json` and reused across assessments.
 
 ---
 
@@ -145,11 +195,16 @@ bandit batch <file> [OPTIONS]
 | `--model MODEL` | `claude-haiku-4-5-20251001` | LLM model ID |
 | `--api-key KEY` | `$ANTHROPIC_API_KEY` | API key for your provider |
 | `--out-dir DIR` | `reports` | Directory to save HTML reports |
+| `--docs-root PATH` | — | Root folder with vendor subfolders (`./docs-root/<vendor-name>/`) |
+| `--drive` | off | Fetch documents from Google Drive for each vendor |
 
-**Example**
+**Examples**
 
 ```bash
+bandit batch vendors.txt
 bandit batch vendors.txt --out-dir ./output
+bandit batch vendors.txt --docs-root ./vendor-docs/
+bandit batch vendors.txt --drive
 ```
 
 ---
@@ -218,12 +273,15 @@ bandit assess https://legal.hubspot.com/privacy-policy
 | `--json` | `assess` | Output raw JSON to terminal |
 | `--no-report` | `assess` | Skip saving the HTML report |
 | `--force` | `assess` | Run even if cadence says vendor is not due |
+| `--docs PATH` | `assess` | Folder containing vendor documents |
+| `--drive` | `assess`, `batch` | Fetch documents from Google Drive |
 | `--model MODEL` | `assess`, `batch` | Override the LLM model |
 | `--api-key KEY` | `assess`, `batch` | Provide API key directly |
-| `--dpa PATH` | `assess` | Path to vendor DPA document (v1.1) |
 | `--out-dir DIR` | `batch` | Output directory for HTML reports |
+| `--docs-root PATH` | `batch` | Root folder with vendor subfolders |
 | `--show` | `setup` | Print current config and exit |
 | `--reset` | `setup` | Remove existing config and restart wizard |
+| `--drive` | `setup` | Configure Google Drive integration |
 | `--dim D1–D8` | `rubric` | Show detail for one dimension |
 
 ---
@@ -270,6 +328,45 @@ https://notion.so/privacy         ← full URL
 stripe.com
 https://aws.amazon.com/privacy/
 ```
+
+**Extended format** — optional columns for functions and docs path:
+
+```
+# vendor, url (optional), functions (optional), docs_path (optional)
+Salesforce,,customer_data,./docs/salesforce/
+NetSuite,,financial_processing,./docs/netsuite/
+HubSpot
+stripe.com
+```
+
+The `docs_path` column (4th) overrides `--docs-root` for that specific vendor.
+
+---
+
+## Document folder structure
+
+Create a root folder with one subfolder per vendor. Bandit auto-detects document types — any filename works.
+
+```
+vendor-docs/
+├── Salesforce/
+│   ├── dpa.pdf                  ← DPA (auto-detected)
+│   ├── msa.pdf                  ← MSA (auto-detected)
+│   └── soc2-2025.pdf            ← SOC 2 Type II (auto-detected)
+├── HubSpot/
+│   ├── hubspot-dpa.docx
+│   └── sub-processors.html
+└── Stripe/
+    └── privacy-policy.pdf
+```
+
+Run with the root folder for batch assessments:
+
+```bash
+bandit batch vendors.txt --docs-root ./vendor-docs/
+```
+
+Bandit matches vendor names to subfolders automatically (case-insensitive, partial match fallback). Vendors without a matching subfolder are assessed from public policy only.
 
 ---
 

@@ -59,13 +59,14 @@ def show_welcome(console: Console | None = None) -> None:
         return t
 
     commands = [
-        (_cmd("bandit setup",  ""),                   "Configure your profile (run this first)"),
-        (_cmd("bandit assess", "<vendor>"),           "Run a full privacy risk assessment"),
-        (_cmd("bandit assess", "<vendor>", "-v"),     "Verbose — see fetched pages and signals"),
-        (_cmd("bandit assess", "<vendor>", "--json"), "Output raw JSON"),
-        (_cmd("bandit batch",  "<vendors.txt>"),      "Assess a full vendor list overnight"),
-        (_cmd("bandit rubric", ""),                   "Show the scoring rubric summary"),
-        (_cmd("bandit rubric", "", "--dim D5"),       "Show criteria for one dimension"),
+        (_cmd("bandit setup",   ""),                   "Configure your profile (run this first)"),
+        (_cmd("bandit assess",  "<vendor>"),           "Run a full privacy risk assessment"),
+        (_cmd("bandit assess",  "<vendor>", "-v"),     "Verbose — see fetched pages and signals"),
+        (_cmd("bandit assess",  "<vendor>", "--json"), "Output raw JSON"),
+        (_cmd("bandit batch",   "<vendors.txt>"),      "Assess a full vendor list overnight"),
+        (_cmd("bandit profile", "<vendor>"),           "Show vendor function profile and doc requirements"),
+        (_cmd("bandit rubric",  ""),                   "Show the scoring rubric summary"),
+        (_cmd("bandit rubric",  "", "--dim D5"),       "Show criteria for one dimension"),
     ]
     for cmd_text, desc in commands:
         cmd_table.add_row(cmd_text, desc)

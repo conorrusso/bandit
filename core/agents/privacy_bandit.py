@@ -123,7 +123,11 @@ class PrivacyBandit(BaseBandit):
             return "domain"
         return "company name"
 
-    def assess(self, vendor: str) -> PrivacyAssessment:
+    def assess(
+        self,
+        vendor: str,
+        docs_folder: str = None,
+    ) -> PrivacyAssessment:
         """Run a full privacy assessment for a vendor.
 
         Parameters
@@ -131,6 +135,9 @@ class PrivacyBandit(BaseBandit):
         vendor:
             Vendor name (e.g. "Acme Corp"), domain (e.g. "acme.com"),
             or full URL (e.g. "https://acme.com/privacy-policy").
+        docs_folder:
+            Optional path to a local folder containing vendor documents
+            (DPA, MSA, SOC 2, etc.) for deeper scoring.
 
         Returns
         -------
@@ -189,6 +196,54 @@ class PrivacyBandit(BaseBandit):
                 f"Could not retrieve any content from {policy_url}"
             )
 
+        # ── Document ingestion (optional) ────────────────────────────
+        documents_assessed: list[str] = []
+        all_doc_signals: dict = {}
+        signal_sources: dict = {}
+
+        if docs_folder:
+            from core.documents.ingestor import DocumentIngestor
+            from core.documents.classifier import DocumentType
+            from core.documents.doc_prompts import get_extraction_prompt
+
+            self._progress("Phase 1/3  Ingesting vendor documents…")
+            ingestor = DocumentIngestor(llm_provider=self.provider)
+            try:
+                manifest = ingestor.ingest_folder(docs_folder)
+                ingestor.show_manifest(manifest)
+
+                ready_docs = [
+                    d for d in manifest.documents
+                    if d.extraction_ok and d.doc_type != DocumentType.UNKNOWN
+                ]
+                documents_assessed = [d.file_name for d in ready_docs]
+
+                for doc in ready_docs:
+                    self._progress(
+                        f"Phase 2/3  Extracting signals from {doc.file_name}…"
+                    )
+                    doc_prompt = get_extraction_prompt(
+                        doc.doc_type, vendor, doc.text
+                    )
+                    try:
+                        doc_signals = self.provider.complete_json(
+                            prompt=doc_prompt,
+                            max_tokens=2048,
+                        )
+                        # Merge: doc signals supplement but don't override
+                        # signals already found in public policy
+                        for key, value in doc_signals.items():
+                            if key not in all_doc_signals:
+                                all_doc_signals[key] = value
+                                signal_sources[key] = doc.file_name
+                            elif value and not all_doc_signals.get(key):
+                                all_doc_signals[key] = value
+                                signal_sources[key] = doc.file_name
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
         # ── Phase 2: Signal extraction ────────────────────────────────
         self._progress(
             f"Phase 2/3  Extracting signals from {len(self._fetch_meta)} page(s)…"
@@ -199,14 +254,82 @@ class PrivacyBandit(BaseBandit):
             max_tokens=2048,
         )
 
+        # Merge document signals into raw_json signals block
+        # Policy signals take precedence; doc signals fill gaps
+        if all_doc_signals:
+            policy_signals = raw_json.get("signals", {})
+            for key, value in all_doc_signals.items():
+                if key not in policy_signals or (
+                    value and not policy_signals.get(key)
+                ):
+                    policy_signals[key] = value
+                    signal_sources.setdefault(key, "document")
+            raw_json["signals"] = policy_signals
+
+            # Merge art28_checklist if DPA signals present
+            art28_keys = {
+                k: v for k, v in all_doc_signals.items()
+                if k.startswith("d8_art28_")
+            }
+            if art28_keys:
+                existing_art28 = raw_json.get("art28_checklist", {})
+                for key, value in art28_keys.items():
+                    art28_key = key[len("d8_art28_"):]
+                    if art28_key not in existing_art28 or (
+                        value and not existing_art28.get(art28_key)
+                    ):
+                        existing_art28[art28_key] = value
+                raw_json["art28_checklist"] = existing_art28
+
+        # ── Evidence confidence ───────────────────────────────────────
+        evidence_confidence = self._calculate_evidence_confidence(
+            fetch_ok=bool(policy_text.strip()),
+            extracted_text=policy_text,
+        )
+
+        # ── Vendor function profiling ─────────────────────────────────
+        vendor_functions = None
+        try:
+            from core.profiles.auto_detect import detector
+            from core.profiles.vendor_cache import profile_cache
+            import datetime as _dt
+
+            domain_for_detect = domain if "domain" in dir() else None
+            cached_profile = profile_cache.get(vendor)
+            if cached_profile:
+                from core.profiles.vendor_functions import VendorFunction
+                vendor_functions = [VendorFunction(f) for f in cached_profile.functions]
+            else:
+                detect_result = detector.detect(vendor, domain=domain_for_detect)
+                vendor_functions = detect_result.functions
+                # Cache the detection result
+                from core.profiles.vendor_cache import VendorProfile
+                vp = VendorProfile(
+                    vendor_name=vendor,
+                    vendor_slug=detect_result.vendor_slug,
+                    functions=[f.value for f in detect_result.functions],
+                    detection_method=detect_result.method,
+                    last_updated=_dt.date.today().isoformat(),
+                )
+                profile_cache.save(vendor, vp)
+        except Exception:
+            vendor_functions = None
+
         # ── Phase 3: Deterministic scoring ───────────────────────────
         self._progress("Phase 3/3  Scoring against rubric…")
         per_dim, fw_list = self._reshape_signals(raw_json)
 
-        from core.config import get_profile_label, get_weights, load_config
+        from core.config import BanditConfig, get_profile_label, load_config
         config = load_config()
-        profile_weights = get_weights(config) if config else None
-        auto_escalate_triggers = (config or {}).get("auto_escalate") or []
+        bandit_cfg = BanditConfig(config)
+        profile_weights = bandit_cfg.get_weights(vendor_functions=vendor_functions)
+        auto_escalate_triggers = bandit_cfg.get_auto_escalate_triggers()
+
+        assessment_scope = (
+            "policy_and_documents"
+            if documents_assessed
+            else "public_policy_only"
+        )
 
         result = score_vendor(
             vendor_name=vendor,
@@ -215,10 +338,58 @@ class PrivacyBandit(BaseBandit):
             framework_evidence=fw_list,
             profile_weights=profile_weights,
             auto_escalate_triggers=auto_escalate_triggers,
-            assessment_scope="public_policy_only",
+            assessment_scope=assessment_scope,
         )
 
         if config:
             result.active_profile = get_profile_label(config)
 
+        result.documents_assessed = documents_assessed
+        result.signal_sources = signal_sources
+
         return PrivacyAssessment(result=result, sources=list(self._fetch_meta))
+
+    # ── Evidence confidence ───────────────────────────────────────────
+
+    @staticmethod
+    def _calculate_evidence_confidence(
+        fetch_ok: bool,
+        extracted_text: str,
+    ) -> float:
+        """Return a 0.0–1.0 confidence score for the evidence quality.
+
+        Based on:
+        - Whether a page was successfully fetched
+        - Total text length (proxy for policy completeness)
+        - Presence of key privacy policy indicators
+        """
+        if not fetch_ok or not extracted_text.strip():
+            return 0.0
+
+        text_len = len(extracted_text)
+        score = 0.0
+
+        # Length component (0.0–0.5)
+        if text_len >= 10_000:
+            score += 0.5
+        elif text_len >= 3_000:
+            score += 0.3
+        elif text_len >= 500:
+            score += 0.1
+
+        # Content indicators (0.0–0.5)
+        text_lower = extracted_text.lower()
+        indicators = [
+            "privacy policy",
+            "personal data",
+            "data controller",
+            "third part",
+            "retain",
+            "delete",
+            "rights",
+            "contact",
+        ]
+        hits = sum(1 for ind in indicators if ind in text_lower)
+        score += min(0.5, hits * 0.065)
+
+        return round(min(1.0, score), 2)

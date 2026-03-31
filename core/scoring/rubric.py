@@ -1067,6 +1067,8 @@ class AssessmentResult:
     escalation_reasons: list[str] = field(default_factory=list)
     active_profile: str | None = None
     assessment_scope: str = "public_policy_only"
+    documents_assessed: list[str] = field(default_factory=list)
+    signal_sources: dict = field(default_factory=dict)
 
 
 def _score_dimension(
