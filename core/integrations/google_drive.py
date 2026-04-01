@@ -40,21 +40,17 @@ class GoogleDriveClient:
         creds = None
 
         if self.TOKEN_PATH.exists():
-            creds = Credentials.from_authorized_user_file(
-                str(self.TOKEN_PATH), self.SCOPES
-            )
-            # If the stored token covers narrower scopes than required
-            # (e.g. drive.readonly → drive), discard it and re-auth.
-            # granted_scopes may be None on older tokens — also check
-            # the scopes field as a fallback.
-            _granted = set(
-                getattr(creds, "granted_scopes", None)
-                or getattr(creds, "scopes", None)
-                or []
-            )
+            # Load WITHOUT injecting SCOPES so creds.scopes reflects what
+            # was actually granted, not what we're requesting.
+            _raw = Credentials.from_authorized_user_file(str(self.TOKEN_PATH))
+            _granted = set(getattr(_raw, "scopes", None) or [])
             _required = set(self.SCOPES)
-            if not _required.issubset(_granted):
-                creds = None
+            if _required.issubset(_granted):
+                # Scopes sufficient — reload properly for use
+                creds = Credentials.from_authorized_user_file(
+                    str(self.TOKEN_PATH), self.SCOPES
+                )
+            # else: creds stays None → OAuth flow triggered below
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
