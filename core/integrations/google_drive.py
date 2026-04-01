@@ -43,11 +43,17 @@ class GoogleDriveClient:
             creds = Credentials.from_authorized_user_file(
                 str(self.TOKEN_PATH), self.SCOPES
             )
-            # If the stored token was granted narrower scopes than required
+            # If the stored token covers narrower scopes than required
             # (e.g. drive.readonly → drive), discard it and re-auth.
-            _granted = set(getattr(creds, "granted_scopes", None) or [])
+            # granted_scopes may be None on older tokens — also check
+            # the scopes field as a fallback.
+            _granted = set(
+                getattr(creds, "granted_scopes", None)
+                or getattr(creds, "scopes", None)
+                or []
+            )
             _required = set(self.SCOPES)
-            if _granted and not _required.issubset(_granted):
+            if not _required.issubset(_granted):
                 creds = None
 
         if not creds or not creds.valid:
