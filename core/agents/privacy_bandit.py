@@ -291,13 +291,11 @@ class PrivacyBandit(BaseBandit):
                             prompt=doc_prompt,
                             max_tokens=2048,
                         )
-                        # Merge: doc signals supplement but don't override
-                        # signals already found in public policy
+                        # Accumulate truthy doc signals only.
+                        # Never store False/null — documents add evidence,
+                        # they never remove it.
                         for key, value in doc_signals.items():
-                            if key not in all_doc_signals:
-                                all_doc_signals[key] = value
-                                signal_sources[key] = doc.file_name
-                            elif value and not all_doc_signals.get(key):
+                            if value and not all_doc_signals.get(key):
                                 all_doc_signals[key] = value
                                 signal_sources[key] = doc.file_name
                     except Exception:
@@ -315,14 +313,13 @@ class PrivacyBandit(BaseBandit):
             max_tokens=2048,
         )
 
-        # Merge document signals into raw_json signals block
-        # Policy signals take precedence; doc signals fill gaps
+        # Merge document signals into raw_json signals block.
+        # Doc signals fill gaps — they never overwrite a True policy signal
+        # with False/null, and never add a False signal for a new key.
         if all_doc_signals:
             policy_signals = raw_json.get("signals", {})
             for key, value in all_doc_signals.items():
-                if key not in policy_signals or (
-                    value and not policy_signals.get(key)
-                ):
+                if value and not policy_signals.get(key):
                     policy_signals[key] = value
                     signal_sources.setdefault(key, "document")
             raw_json["signals"] = policy_signals

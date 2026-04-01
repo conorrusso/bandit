@@ -317,18 +317,40 @@ def assess(
 
         # ── Save report to Drive if --drive and auto_save_reports ─────
         if drive:
+            import traceback as _tb
+            console.print("  [dim color(245)]Drive save: attempting…[/]")
             try:
                 from core.config import load_config as _lc
-                _drive_cfg = (_lc() or {}).get("integrations", {}).get("google_drive", {})
-                if _drive_cfg.get("auto_save_reports", True):
+                _cfg_data = _lc() or {}
+                _drive_cfg = _cfg_data.get("integrations", {}).get("google_drive", {})
+                console.print(f"  [dim color(245)]Drive config: {_drive_cfg}[/]")
+                if not _drive_cfg:
+                    console.print(
+                        "  [color(220)]⚠[/]  [color(245)]Drive save skipped — "
+                        "no Drive config found (run bandit setup --drive)[/]"
+                    )
+                elif not _drive_cfg.get("root_folder_id"):
+                    console.print(
+                        "  [color(220)]⚠[/]  [color(245)]Drive save skipped — "
+                        "no root_folder_id in config[/]"
+                    )
+                elif not _drive_cfg.get("auto_save_reports", True):
+                    console.print(
+                        "  [dim color(245)]Drive save skipped — "
+                        "auto_save_reports=false in config[/]"
+                    )
+                else:
+                    console.print(
+                        f"  [dim color(245)]Drive save: vendor={vendor_str!r} "
+                        f"folder={_drive_cfg['root_folder_id']!r}[/]"
+                    )
                     from core.integrations.google_drive import GoogleDriveClient
                     _dc = GoogleDriveClient()
                     _dc.authenticate()
-                    _fid = _drive_cfg.get("root_folder_id")
                     _file_id = _dc.save_report_to_drive(
                         local_file_path=str(report_path),
                         vendor_name=vendor_str,
-                        parent_folder_id=_fid,
+                        parent_folder_id=_drive_cfg["root_folder_id"],
                     )
                     if _file_id:
                         console.print(
@@ -338,12 +360,12 @@ def assess(
                     else:
                         console.print(
                             "  [color(220)]⚠[/]  [color(245)]Could not save to Drive — "
-                            "vendor folder not found in Drive[/]"
+                            "vendor folder not found. Check folder name matches "
+                            f"'{vendor_str}' in your Drive root.[/]"
                         )
             except Exception as _e:
-                console.print(
-                    f"  [color(220)]⚠[/]  [color(245)]Drive save failed: {_e}[/]"
-                )
+                console.print(f"  [color(196)]✗[/]  [color(245)]Drive save error: {_e}[/]")
+                console.print(f"  [dim color(245)]{_tb.format_exc()}[/]")
 
     # ── Save to vendor history ────────────────────────────────────────
     _save_history(slug, assessment.result.risk_tier, assessment.result.weighted_average)
