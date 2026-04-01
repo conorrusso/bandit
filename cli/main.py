@@ -315,6 +315,36 @@ def assess(
             f"\n  [color(243)]Report saved →[/] [color(172)]{report_path}[/]"
         )
 
+        # ── Save report to Drive if --drive and auto_save_reports ─────
+        if drive:
+            try:
+                from core.config import load_config as _lc
+                _drive_cfg = (_lc() or {}).get("integrations", {}).get("google_drive", {})
+                if _drive_cfg.get("auto_save_reports", True):
+                    from core.integrations.google_drive import GoogleDriveClient
+                    _dc = GoogleDriveClient()
+                    _dc.authenticate()
+                    _fid = _drive_cfg.get("root_folder_id")
+                    _file_id = _dc.save_report_to_drive(
+                        local_file_path=str(report_path),
+                        vendor_name=vendor_str,
+                        parent_folder_id=_fid,
+                    )
+                    if _file_id:
+                        console.print(
+                            f"  [color(82)]✓[/]  [color(245)]Report saved to Drive →[/] "
+                            f"[color(172)]{vendor_str}/{report_path.name}[/]"
+                        )
+                    else:
+                        console.print(
+                            "  [color(220)]⚠[/]  [color(245)]Could not save to Drive — "
+                            "vendor folder not found in Drive[/]"
+                        )
+            except Exception as _e:
+                console.print(
+                    f"  [color(220)]⚠[/]  [color(245)]Drive save failed: {_e}[/]"
+                )
+
     # ── Save to vendor history ────────────────────────────────────────
     _save_history(slug, assessment.result.risk_tier, assessment.result.weighted_average)
 

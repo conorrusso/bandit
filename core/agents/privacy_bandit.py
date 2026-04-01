@@ -95,6 +95,65 @@ class PrivacyBandit(BaseBandit):
     # ── Signal reshaping ──────────────────────────────────────────────
 
     @staticmethod
+    def _translate_dpa_signals(signals: dict) -> dict:
+        """Map granular d8_art28_* DPA extraction signals to aggregate D8 rubric signal names.
+
+        The DPA extraction prompt returns per-provision booleans (d8_art28_*).
+        The D8 rubric checks aggregate signals (d8_all_art28_provisions, etc.).
+        Without this translation, DPA signals never reach D8 scoring.
+        """
+        translated: dict = {}
+
+        # 8 core Art.28(3)(a)–(h) provisions
+        art28_core = [
+            signals.get("d8_art28_controller_obligations"),  # 3a documented instructions
+            signals.get("d8_art28_confidentiality"),         # 3b confidentiality
+            signals.get("d8_art28_security_measures"),       # 3c security measures
+            signals.get("d8_art28_sub_processor_approval"),  # 3d sub-processing
+            signals.get("d8_art28_assistance_dsars"),        # 3e DSAR assistance
+            signals.get("d8_art28_audit_rights"),            # 3f audit/inspection
+            signals.get("d8_art28_deletion_return"),         # 3g deletion/return
+            signals.get("d8_art28_assistance_breach"),       # 3h breach assistance
+        ]
+        present_count = sum(1 for p in art28_core if p)
+
+        if present_count >= 8:
+            translated["d8_all_art28_provisions"] = True
+            translated["d8_most_art28_provisions"] = True
+        elif present_count >= 5:
+            translated["d8_most_art28_provisions"] = True
+
+        # Processing annex exists — subject matter + data types + data subjects defined
+        if (signals.get("d8_art28_subject_matter") and
+                signals.get("d8_art28_data_types") and
+                signals.get("d8_art28_data_subjects")):
+            translated["d8_processing_annex_exists"] = True
+
+        # Detailed annex — also includes duration and nature/purpose
+        if (translated.get("d8_processing_annex_exists") and
+                signals.get("d8_art28_duration") and
+                signals.get("d8_art28_nature_purpose")):
+            translated["d8_processing_annex_detailed"] = True
+
+        # TOMs in annex — security measures described with specificity
+        if signals.get("d8_art28_security_measures_specific"):
+            translated["d8_toms_in_annex"] = True
+
+        # Measurable SLAs — breach SLA hours AND deletion timeframe both numeric
+        breach_sla = signals.get("d5_breach_notification_sla_hours")
+        deletion_days = signals.get("d7_deletion_timeframe_days")
+        if (breach_sla and isinstance(breach_sla, (int, float)) and int(breach_sla) > 0
+                and deletion_days and isinstance(deletion_days, (int, float))
+                and int(deletion_days) > 0):
+            translated["d8_measurable_slas"] = True
+
+        # International transfers specified — mechanism named + SCC module number stated
+        if signals.get("d4_transfer_mechanism_stated") and signals.get("d4_scc_module_specified"):
+            translated["d8_international_transfers_specified"] = True
+
+        return translated
+
+    @staticmethod
     def _reshape_signals(raw_json: dict) -> tuple[dict[str, dict[str, bool]], list[str]]:
         """Reshape flat signal dict into per-dimension dicts for score_vendor()."""
         signals: dict = raw_json.get("signals", {})
@@ -283,6 +342,15 @@ class PrivacyBandit(BaseBandit):
                         existing_art28[art28_key] = value
                 raw_json["art28_checklist"] = existing_art28
 
+            # Translate granular DPA provision signals → aggregate D8 rubric signal names
+            # (d8_art28_* → d8_all_art28_provisions, d8_processing_annex_exists, etc.)
+            d8_translated = self._translate_dpa_signals(all_doc_signals)
+            if d8_translated:
+                _sigs = raw_json.setdefault("signals", {})
+                for k, v in d8_translated.items():
+                    if k not in _sigs or (v and not _sigs.get(k)):
+                        _sigs[k] = v
+
         # ── Evidence confidence ───────────────────────────────────────
         evidence_confidence = self._calculate_evidence_confidence(
             fetch_ok=bool(policy_text.strip()),
@@ -328,7 +396,7 @@ class PrivacyBandit(BaseBandit):
         auto_escalate_triggers = bandit_cfg.get_auto_escalate_triggers()
 
         dpa_found = any(
-            d.doc_type == DocumentType.DPA and d.extraction_ok
+            d.doc_type == DocumentType.DPA and d.extraction_ok and d.char_count > 5000
             for d in ready_docs
         )
         scored_doc_types = {

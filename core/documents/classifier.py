@@ -95,7 +95,14 @@ FILENAME_PATTERNS: dict[DocumentType, list[str]] = {
     DocumentType.MSA: [
         "msa", "master-services", "master_services",
         "master-agreement", "service-agreement",
-        "master-subscription"
+        "master-subscription", "framework-agreement",
+        "service-level-agreement", "sla"
+    ],
+    DocumentType.SAAS_AGREEMENT: [
+        "saas-license", "saas_license", "saas-agreement",
+        "license-agreement", "subscription-agreement",
+        "software-license", "terms-of-service",
+        "master-subscription-agreement"
     ],
     DocumentType.BAA: [
         "baa", "business-associate", "hipaa-agreement",
@@ -141,7 +148,9 @@ FILENAME_PATTERNS: dict[DocumentType, list[str]] = {
     DocumentType.AI_POLICY: [
         "ai-policy", "ai_policy", "responsible-ai",
         "ai-principles", "ai-usage", "ai-guidelines",
-        "artificial-intelligence-policy", "genai-policy"
+        "artificial-intelligence-policy", "genai-policy",
+        "ai-faq", "ai_faq", "legal-ai", "ai-legal",
+        "responsible-ai-faq", "generative-ai-faq"
     ],
     DocumentType.MODEL_CARD: [
         "model-card", "model_card", "modelcard",
@@ -222,11 +231,18 @@ CONTENT_PATTERNS: dict[DocumentType, list[str]] = {
         "iso/iec 42001", "ai management system",
         "artificial intelligence management"
     ],
+    DocumentType.SAAS_AGREEMENT: [
+        "subscription term", "license grant",
+        "permitted users", "software as a service",
+        "acceptable use", "service level",
+        "saas", "subscription fee"
+    ],
     DocumentType.AI_POLICY: [
         "responsible ai", "ai principles",
         "generative ai", "large language model",
         "ai governance", "ai usage policy",
-        "training data", "model training"
+        "training data", "model training",
+        "ai faq", "legal ai"
     ],
     DocumentType.TIA: [
         "transfer impact assessment",
