@@ -209,6 +209,163 @@ class GoogleDriveClient:
         dest.write_bytes(fh.getvalue())
         return str(dest)
 
+    PROFILES_FILENAME = ".vendor-profiles.json"
+
+    def create_vendor_folder(
+        self,
+        vendor_name: str,
+        parent_folder_id: str
+    ) -> str:
+        """
+        Create a vendor subfolder in the Bandit
+        root folder. Returns the new folder_id.
+        """
+        file_metadata = {
+            "name": vendor_name,
+            "mimeType": (
+                "application/vnd.google-apps.folder"
+            ),
+            "parents": [parent_folder_id],
+        }
+        result = self.service.files().create(
+            body=file_metadata,
+            fields="id, name"
+        ).execute()
+        return result.get("id")
+
+    def find_vendor_folder_fuzzy(
+        self,
+        vendor_name: str,
+        parent_folder_id: str
+    ) -> list[dict]:
+        """
+        Search for vendor folder with fuzzy matching.
+        Returns list of candidate matches:
+        [{"id": "...", "name": "...", "match": "exact"|"close"}]
+        """
+        folders = self.list_vendor_folders(parent_folder_id)
+        vendor_lower = vendor_name.lower().strip()
+        candidates = []
+
+        for folder in folders:
+            folder_lower = folder["name"].lower().strip()
+
+            if folder_lower == vendor_lower:
+                candidates.append({
+                    "id": folder["id"],
+                    "name": folder["name"],
+                    "match": "exact"
+                })
+            elif (vendor_lower in folder_lower
+                  or folder_lower in vendor_lower):
+                candidates.append({
+                    "id": folder["id"],
+                    "name": folder["name"],
+                    "match": "close"
+                })
+
+        # Exact matches first
+        candidates.sort(
+            key=lambda x: 0 if x["match"] == "exact" else 1
+        )
+        return candidates
+
+    def read_vendor_profiles(
+        self,
+        root_folder_id: str
+    ) -> dict | None:
+        """
+        Read .vendor-profiles.json from Drive root folder.
+        Returns parsed dict or None if not found.
+        """
+        import io
+
+        # Search for the profiles file
+        results = self.service.files().list(
+            q=(
+                f"'{root_folder_id}' in parents "
+                f"and name = '{self.PROFILES_FILENAME}' "
+                f"and trashed = false"
+            ),
+            fields="files(id, name)",
+            pageSize=1
+        ).execute()
+
+        files = results.get("files", [])
+        if not files:
+            return None
+
+        file_id = files[0]["id"]
+
+        # Download content
+        from googleapiclient.http import MediaIoBaseDownload
+        request = self.service.files().get_media(
+            fileId=file_id
+        )
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+        import json
+        try:
+            return json.loads(fh.getvalue().decode("utf-8"))
+        except Exception:
+            return None
+
+    def write_vendor_profiles(
+        self,
+        profiles: dict,
+        root_folder_id: str
+    ) -> None:
+        """
+        Write .vendor-profiles.json to Drive root folder.
+        Updates existing file or creates new one.
+        """
+        import io
+        import json
+        from googleapiclient.http import MediaIoBaseUpload
+
+        content = json.dumps(
+            profiles, indent=2
+        ).encode("utf-8")
+        media = MediaIoBaseUpload(
+            io.BytesIO(content),
+            mimetype="application/json"
+        )
+
+        # Check if file already exists
+        results = self.service.files().list(
+            q=(
+                f"'{root_folder_id}' in parents "
+                f"and name = '{self.PROFILES_FILENAME}' "
+                f"and trashed = false"
+            ),
+            fields="files(id)",
+            pageSize=1
+        ).execute()
+
+        existing = results.get("files", [])
+
+        if existing:
+            # Update existing file
+            self.service.files().update(
+                fileId=existing[0]["id"],
+                media_body=media
+            ).execute()
+        else:
+            # Create new file
+            file_metadata = {
+                "name": self.PROFILES_FILENAME,
+                "parents": [root_folder_id],
+            }
+            self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields="id"
+            ).execute()
+
     def save_report_to_drive(
         self,
         local_file_path: str,

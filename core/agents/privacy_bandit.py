@@ -188,6 +188,7 @@ class PrivacyBandit(BaseBandit):
         self,
         vendor: str,
         docs_folder: str = None,
+        integration_context: str | None = None,
     ) -> PrivacyAssessment:
         """Run a full privacy assessment for a vendor.
 
@@ -310,6 +311,8 @@ class PrivacyBandit(BaseBandit):
             f"Phase 2/3  Extracting signals from {len(self._fetch_meta)} page(s)…"
         )
         extraction_prompt = build_extraction_prompt(vendor, policy_text)
+        if integration_context:
+            extraction_prompt = extraction_prompt + "\n\n" + integration_context
         raw_json = self.provider.complete_json(
             prompt=extraction_prompt,
             max_tokens=2048,
@@ -393,6 +396,19 @@ class PrivacyBandit(BaseBandit):
         bandit_cfg = BanditConfig(config)
         profile_weights = bandit_cfg.get_weights(vendor_functions=vendor_functions)
         auto_escalate_triggers = bandit_cfg.get_auto_escalate_triggers()
+
+        # Apply intake weight modifiers if vendor profile has intake data
+        try:
+            from core.profiles.vendor_cache import profile_cache as _pc
+            _vp = _pc.get(vendor)
+            if _vp and _vp.intake_completed:
+                from core.profiles.intake import apply_intake_weight_modifiers
+                org_profile = bandit_cfg.get_profile()
+                profile_weights = apply_intake_weight_modifiers(
+                    profile_weights, _vp, org_profile
+                )
+        except Exception:
+            pass
 
         dpa_found = any(
             d.doc_type == DocumentType.DPA and d.extraction_ok and d.char_count > 5000

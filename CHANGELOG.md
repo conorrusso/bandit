@@ -6,6 +6,52 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## [1.3.0] — 2026-04-01
+
+### Added
+
+**Vendor Intelligence**
+- `bandit vendor add` — 12-question intake wizard
+- `bandit vendor show` — view vendor profile
+- `bandit vendor edit` — update intake answers
+- `bandit vendor list` — list all vendors with risk tier, score, next due, intake status
+- `bandit vendor list --due` — vendors due for reassessment only
+- `bandit vendor list --risk HIGH/MEDIUM/LOW`
+
+**Tech Stack**
+- `bandit setup --stack` — collect your actual internal tools by category
+- Industry-specific categories based on org profile
+- Used in vendor intake Q6 to show real system names
+
+**IT Notification Queue**
+- `bandit setup --notify` — configure IT contact
+- Notifications queued after vendor intake
+- IT actions generated per integration category
+- Sending enabled in v1.4
+
+**Assessment History**
+- Every `bandit assess` writes result to vendor profile
+- Stores date, risk tier, score, scope, report path, next due date
+- Last 10 assessments retained per vendor
+- Foundation for v1.4 dashboard and schedule
+
+**Intake Context in Assessments**
+- Vendor profile loaded at start of every assess
+- Integration context paragraph injected into extraction prompts
+- Weight modifiers applied from intake data types and integrations
+- Double-counting prevention vs org profile weights
+- Admin access triggers D2 weight increase
+
+**Google Drive Profile Sync**
+- Vendor profiles sync to Drive when configured
+- `bandit vendor add` checks for existing folder before offering to create one
+- Fuzzy folder matching with user confirmation
+- Profile stored as `.vendor-profiles.json` in root
+- Local cache always maintained as fallback
+- Sync failures never block assessment
+
+---
+
 ## [1.2.0] — 2026-04-02
 
 ### Added

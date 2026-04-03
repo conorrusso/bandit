@@ -241,6 +241,84 @@ def assess(
 
     provider = AnthropicProvider(model=model, api_key=api_key)
 
+    # ── 7D: Sync vendor profiles FROM Drive at start of assess ───────
+    _assess_drive_cfg = None
+    _assess_drive_folder_id = None
+    _assess_drive_client = None
+    if drive:
+        try:
+            from core.config import load_config as _lc2
+            _assess_drive_cfg = (_lc2() or {}).get("integrations", {}).get("google_drive", {})
+            _assess_drive_folder_id = _assess_drive_cfg.get("root_folder_id") if _assess_drive_cfg else None
+            if _assess_drive_folder_id:
+                from core.integrations.google_drive import GoogleDriveClient as _GDC
+                _assess_drive_client = _GDC()
+                _assess_drive_client.authenticate()
+                from core.profiles.vendor_cache import VendorProfileCache as _VPC2
+                _VPC2().sync_from_drive(_assess_drive_client, _assess_drive_folder_id)
+        except Exception:
+            pass  # Use local cache if Drive unavailable
+
+    # ── 7G: Prompt for intake on first assess ─────────────────────────
+    from core.profiles.vendor_cache import VendorProfileCache as _VPC3
+    _vendor_profile = _VPC3().get(vendor_str)
+    if not _vendor_profile or not _vendor_profile.intake_completed:
+        console.print()
+        console.print(
+            "  [color(245)]New vendor — no intake data on file.[/]\n\n"
+            "  [color(245)]a)[/]  Run quick intake (12 questions, ~3 min)\n"
+            "       Better accuracy and risk context\n\n"
+            "  [color(245)]s)[/]  Skip — assess with available data only\n"
+        )
+        _intake_choice = console.input(
+            "  [color(220)]Choice[/] [color(245)](default s):[/] "
+        ).strip().lower()
+        if _intake_choice == "a":
+            from core.profiles.intake import IntakeWizard as _IW
+            _iw = _IW(vendor_str)
+            _iw_answers = _iw.run()
+            if _iw_answers:
+                from core.profiles.auto_detect import VendorAutoDetector as _VAD
+                _det = _VAD()
+                _det_result = _det.detect(vendor_str)
+                _vp3 = _VPC3()
+                _vp_obj = _vp3.get(vendor_str) or _vp3._build_new_profile(vendor_str, _det_result)
+                _vp_obj.intake_completed = True
+                import datetime as _idt
+                _vp_obj.intake_date = _idt.date.today().isoformat()
+                for _k, _v in _iw_answers.items():
+                    if hasattr(_vp_obj, _k):
+                        setattr(_vp_obj, _k, _v)
+                _vp3.save(vendor_str, _vp_obj)
+                _vendor_profile = _vp_obj
+            console.print()
+
+    # ── 7E: Build integration context from intake data ────────────────
+    _integration_context = None
+    if _vendor_profile and _vendor_profile.intake_completed:
+        from core.profiles.intake import build_integration_context_paragraph
+        _integration_context = build_integration_context_paragraph(_vendor_profile)
+
+    # ── 7F: Show intake context in verbose mode ───────────────────────
+    if verbose and _vendor_profile and _vendor_profile.intake_completed:
+        _data_labels = ", ".join(
+            t.replace("_", " ") for t in (_vendor_profile.data_types or [])
+        ) or "—"
+        _int_names = " · ".join(
+            i["system_name"] for i in (_vendor_profile.integrations or [])
+        ) or "none"
+        console.print(
+            f"  [color(245)]Intake context loaded:[/]\n"
+            f"    Data: [color(220)]{_data_labels}[/] · "
+            f"{_vendor_profile.data_volume or '—'} · "
+            f"{_vendor_profile.environment_access or '—'}\n"
+            f"    Integrations: [color(220)]{_int_names}[/]\n"
+            f"    Criticality:  {_vendor_profile.criticality or '—'}\n"
+            f"    AI: {_vendor_profile.ai_in_service or '—'} · "
+            f"Training: {_vendor_profile.ai_trains_on_data or '—'}"
+        )
+        console.print()
+
     # Resolve docs folder — Drive download if --drive
     docs_folder = docs
     _drive_tmp = None
@@ -283,7 +361,11 @@ def assess(
     try:
         with assessment_progress(verbose=verbose) as update:
             bandit = PrivacyBandit(provider=provider, on_progress=update)
-            assessment = bandit.assess(vendor_str, docs_folder=docs_folder)
+            assessment = bandit.assess(
+                vendor_str,
+                docs_folder=docs_folder,
+                integration_context=_integration_context,
+            )
         legal_result = getattr(assessment.result, "legal_bandit_result", None)
         if legal_result:
             _CONTRACT_DIMS = {"D2", "D5", "D7", "D8"}
@@ -416,6 +498,25 @@ def assess(
     # ── Save to vendor history ────────────────────────────────────────
     _save_history(slug, assessment.result.risk_tier, assessment.result.weighted_average)
 
+    # ── Write assessment history to vendor profile ────────────────────
+    try:
+        from core.profiles.vendor_cache import VendorProfileCache as _VPC
+        _hist_report_path = str(report_path) if not no_report else ""
+        _hist_legal_path = str(legal_report_path) if (not no_report and legal_report_path) else None
+        assessment.result.report_path = _hist_report_path
+        assessment.result.legal_brief_path = _hist_legal_path
+        _VPC().update_assessment_history(vendor_str, assessment.result)
+    except Exception:
+        pass  # Never let history writing crash the assess
+
+    # ── 7D: Sync vendor profiles TO Drive at end of assess ───────────
+    if _assess_drive_client and _assess_drive_folder_id:
+        try:
+            from core.profiles.vendor_cache import VendorProfileCache as _VPC4
+            _VPC4().sync_to_drive(_assess_drive_client, _assess_drive_folder_id)
+        except Exception:
+            pass  # Never block assess for Drive sync
+
     # Tip when no profile configured
     if not _config:
         console.print(
@@ -542,7 +643,9 @@ def rubric(dim: str | None) -> None:
 @click.option("--show",     is_flag=True, help="Print current config summary and exit")
 @click.option("--advanced", is_flag=True, help="Advanced configuration (coming soon)")
 @click.option("--drive",    is_flag=True, help="Configure Google Drive integration")
-def setup(reset: bool, show: bool, advanced: bool, drive: bool) -> None:
+@click.option("--stack",    is_flag=True, help="Configure your tech stack")
+@click.option("--notify",   is_flag=True, help="Configure IT notification settings")
+def setup(reset: bool, show: bool, advanced: bool, drive: bool, stack: bool, notify: bool) -> None:
     """Configure your industry and regulatory profile.
 
     Runs a short wizard (5 core + up to 3 conditional questions) that
@@ -555,6 +658,8 @@ def setup(reset: bool, show: bool, advanced: bool, drive: bool) -> None:
       bandit setup --reset
       bandit setup --show
       bandit setup --drive
+      bandit setup --stack
+      bandit setup --notify
       bandit setup --advanced
     """
     from rich.console import Console
@@ -564,6 +669,14 @@ def setup(reset: bool, show: bool, advanced: bool, drive: bool) -> None:
 
     if drive:
         _run_drive_setup(con)
+        return
+
+    if stack:
+        _run_stack_setup(con)
+        return
+
+    if notify:
+        _run_notify_setup(con)
         return
 
     if show:
@@ -588,6 +701,183 @@ def setup(reset: bool, show: bool, advanced: bool, drive: bool) -> None:
         con.print(f"\n  [bold color(196)]✗[/]  [color(245)]Setup error: {exc}[/]")
         con.print("  [dim color(245)]Run [color(220)]bandit setup[/][dim color(245)] to try again.[/]\n")
         sys.exit(1)
+
+
+def _run_stack_setup(con) -> None:
+    """Interactive tech stack wizard."""
+    import re as _re
+    import pathlib
+    import yaml
+    from core.config import load_config, CATEGORY_DATA_MAP
+    from rich.prompt import Prompt
+
+    con.print("\n  [bold color(172)]TECH STACK SETUP[/]\n")
+    con.print(
+        "  [color(245)]Tell Bandit which tools your organisation uses.[/]\n"
+        "  [color(245)]This improves vendor intake — Q6 will show real system names.[/]\n"
+        "  [color(245)]Press Enter to skip any category.[/]\n"
+    )
+
+    # Load org profile for industry-specific sections
+    cfg = load_config() or {}
+    company = cfg.get("company", {})
+    org_type = company.get("org_type", "").lower()
+
+    # Section definitions
+    SECTIONS = [
+        ("customer_revenue", "Customer & Revenue", [
+            ("crm",              "CRM / Customer database",         "customer_data"),
+            ("billing",          "Billing / Invoicing",             "financial_processing"),
+            ("customer_support", "Customer support / Helpdesk",     "customer_data"),
+        ]),
+        ("people_operations", "People & Operations", [
+            ("hr_payroll",       "HR / Payroll / People",           "hr_people"),
+            ("identity_sso",     "Identity / SSO / Directory",      "identity_access"),
+            ("finance_erp",      "Finance / ERP / Accounting",      "financial_processing"),
+            ("procurement",      "Procurement / Spend",             "financial_processing"),
+        ]),
+        ("infrastructure_data", "Infrastructure & Data", [
+            ("cloud_infra",      "Cloud infrastructure",            "infrastructure"),
+            ("data_warehouse",   "Data warehouse / Analytics",      "analytics_bi"),
+            ("communication",    "Communication / Collaboration",   "communication"),
+            ("source_code",      "Source code / Engineering",       "infrastructure"),
+        ]),
+    ]
+
+    # Industry-specific sections
+    if "healthcare" in org_type or "health" in org_type:
+        SECTIONS.append(("healthcare", "Healthcare", [
+            ("ehr",              "Clinical / EHR",                  "healthcare_clinical"),
+        ]))
+    if "financial" in org_type or "finance" in org_type or "bank" in org_type:
+        SECTIONS.append(("financial_services", "Financial Services", [
+            ("core_banking",     "Core banking",                    "financial_processing"),
+        ]))
+    if "manufactur" in org_type:
+        SECTIONS.append(("manufacturing", "Manufacturing", [
+            ("erp_supply",       "ERP / Supply chain",              "supply_chain"),
+        ]))
+    if "education" in org_type or "school" in org_type or "university" in org_type:
+        SECTIONS.append(("education", "Education", [
+            ("student_lms",      "Student / LMS",                   "general_saas"),
+        ]))
+    if "legal" in org_type or "law" in org_type:
+        SECTIONS.append(("legal", "Legal", [
+            ("case_management",  "Case management",                 "legal_compliance"),
+        ]))
+    if "government" in org_type or "public sector" in org_type:
+        SECTIONS.append(("government", "Government", [
+            ("grc_compliance",   "GRC / Compliance",                "legal_compliance"),
+        ]))
+
+    tech_stack: dict = {}
+    total_tools = 0
+
+    for section_key, section_label, categories in SECTIONS:
+        con.print(f"  [bold color(250)]{section_label}[/]")
+        section_data: dict = {}
+
+        for cat_key, cat_label, category in categories:
+            raw = Prompt.ask(
+                f"  [dim]{cat_label}[/]",
+                default=""
+            ).strip()
+            if not raw:
+                continue
+
+            cat_info = CATEGORY_DATA_MAP.get(category, {})
+            tools = []
+            for tool_name in [t.strip() for t in raw.split(",") if t.strip()]:
+                slug = _re.sub(r"[^a-z0-9-]", "-", tool_name.lower()).strip("-")
+                tools.append({
+                    "name": tool_name,
+                    "slug": slug,
+                    "category": category,
+                    "category_label": cat_label,
+                    "section_label": section_label,
+                    "data_sensitivity": cat_info.get("sensitivity", "medium"),
+                    "data_description": cat_info.get("data_description", "business data"),
+                })
+                total_tools += 1
+            if tools:
+                section_data[cat_key] = tools
+
+        if section_data:
+            tech_stack[section_key] = section_data
+        con.print()
+
+    if not tech_stack:
+        con.print("  [color(245)]No tools entered — nothing saved.[/]\n")
+        return
+
+    # Save to config
+    cfg = load_config() or {}
+    cfg["tech_stack"] = tech_stack
+
+    config_path = pathlib.Path("bandit.config.yml")
+    try:
+        config_path.write_text(
+            yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+        )
+        category_count = sum(len(v) for v in tech_stack.values())
+        con.print(
+            f"  [green]✓[/green] Tech stack saved — "
+            f"{total_tools} system(s) across {category_count} category/categories\n"
+            f'  [dim]Run bandit vendor add "VendorName" to use in intake.[/dim]\n'
+        )
+    except Exception as e:
+        con.print(f"  [color(196)]✗[/]  Could not save config: {e}\n")
+
+
+def _run_notify_setup(con) -> None:
+    """Configure IT notification settings."""
+    import pathlib
+    import yaml
+    from core.config import load_config
+    from rich.prompt import Prompt
+
+    con.print("\n  [bold color(172)]IT NOTIFICATION SETUP[/]\n")
+    con.print(
+        "  [color(245)]When you run bandit vendor add, Bandit queues[/]\n"
+        "  [color(245)]IT notifications for integration setup.[/]\n"
+        "  [color(245)]Configure where to send them.[/]\n\n"
+        "  [color(220)]Note:[/] [color(245)]Sending is not yet available in v1.3.[/]\n"
+        "  [color(245)]Notifications are queued and will be sent in v1.4[/]\n"
+        "  [color(245)]when Slack and email integration is enabled.[/]\n"
+    )
+
+    email = Prompt.ask(
+        "  IT team email address (or Enter to skip)",
+        default=""
+    ).strip()
+    slack = Prompt.ask(
+        "  IT Slack channel (or Enter to skip)",
+        default=""
+    ).strip()
+
+    if not email and not slack:
+        con.print("  [color(245)]No notification settings saved.[/]\n")
+        return
+
+    cfg = load_config() or {}
+    notifications = {}
+    if email:
+        notifications["it_contact_email"] = email
+    if slack:
+        notifications["it_slack_channel"] = slack
+    cfg["notifications"] = notifications
+
+    config_path = pathlib.Path("bandit.config.yml")
+    try:
+        config_path.write_text(
+            yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+        )
+        con.print(
+            "  [green]✓[/green] Notification settings saved.\n"
+            "  [dim]Queued notifications will be sent in a future update.[/]\n"
+        )
+    except Exception as e:
+        con.print(f"  [color(196)]✗[/]  Could not save config: {e}\n")
 
 
 def _run_drive_setup(con) -> None:
@@ -1296,6 +1586,10 @@ def _vendor_slug(vendor: str) -> str:
 
 
 
+
+# Register vendor command group
+from cli.vendor import vendor as _vendor_group  # noqa: E402
+main.add_command(_vendor_group, "vendor")
 
 if __name__ == "__main__":
     main()

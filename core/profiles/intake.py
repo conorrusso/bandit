@@ -1,0 +1,873 @@
+"""
+Bandit Vendor Intake Wizard
+============================
+12-question intake wizard capturing business context per vendor.
+Called by cli/vendor.py.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from datetime import datetime
+from rich.console import Console
+from rich.prompt import Prompt, Confirm
+from core.config import BanditConfig, CATEGORY_DATA_MAP
+from core.config import INTEGRATION_IT_ACTIONS
+
+PROGRESS_FILE = (
+    Path.home() / ".bandit" / ".intake_progress.json"
+)
+
+# ── Question definitions ──────────────────────────────
+
+Q1_DATA_TYPES = [
+    ("customer_pii",    "Customer PII"),
+    ("employee_pii",    "Employee PII"),
+    ("phi",             "PHI / health data"),
+    ("pci",             "PCI / payment card"),
+    ("financial",       "Financial records"),
+    ("source_code",     "Source code / IP"),
+    ("operational",     "Operational / internal only"),
+    ("none",            "No personal data"),
+]
+
+Q2_VOLUME = [
+    ("none",    "None"),
+    ("low",     "Low  (fewer than 1,000 records)"),
+    ("medium",  "Medium  (1,000 – 100,000 records)"),
+    ("high",    "High  (100,000+ records)"),
+]
+
+Q3_ENVIRONMENT = [
+    ("production",  "Production data"),
+    ("sandbox",     "Sandbox / test only"),
+    ("both",        "Both"),
+    ("none",        "No direct data access"),
+]
+
+Q4_ACCESS = [
+    ("none",        "No access"),
+    ("read_only",   "Read-only"),
+    ("read_write",  "Read / Write"),
+    ("admin",       "Admin / Privileged"),
+]
+
+Q8_AI = [
+    ("yes",     "Yes"),
+    ("no",      "No"),
+    ("unknown", "Unknown"),
+]
+
+Q9_TRAINING = [
+    ("yes",         "Yes"),
+    ("no",          "No"),
+    ("opt_out",     "Opt-out available"),
+    ("unknown",     "Unknown"),
+    ("na",          "N/A — vendor does not use AI"),
+]
+
+Q10_CRITICALITY = [
+    ("critical",      "Critical — immediate business impact if down"),
+    ("important",     "Important — degraded operations"),
+    ("useful",        "Useful — workaround available"),
+    ("non_essential", "Non-essential"),
+]
+
+Q11_SPEND = [
+    ("under_10k",     "Under $10,000"),
+    ("10k_50k",       "$10,000 – $50,000"),
+    ("50k_250k",      "$50,000 – $250,000"),
+    ("over_250k",     "$250,000+"),
+]
+
+# ── Integration weight modifiers ─────────────────────
+
+INTEGRATION_WEIGHT_MODIFIERS = {
+    "customer_data":       {"D1": 0.3, "D3": 0.3},
+    "analytics_bi":        {"D1": 0.3, "D6": 0.5, "D7": 0.2},
+    "identity_access":     {"D1": 0.3, "D5": 0.3, "D7": 0.2},
+    "source_code":         {"D1": 0.5, "D6": 0.3, "D7": 0.2},
+    "hr_people":           {"D1": 0.3, "D3": 0.3, "D5": 0.2},
+    "healthcare_clinical": {"D1": 0.5, "D5": 1.0, "D8": 0.5},
+    "financial_processing":{"D1": 0.3, "D7": 0.5, "D8": 0.3},
+    "infrastructure":      {"D2": 0.3, "D5": 0.3, "D8": 0.3},
+    "communication":       {"D1": 0.2, "D7": 0.2},
+    "security_tooling":    {"D2": 0.5, "D5": 0.5},
+    "payments":            {"D7": 0.5},
+}
+
+# ── Intake data type → sensitivity mapping ─────────────
+INTAKE_DATA_SENSITIVITY = {
+    "customer_pii": {"D1": 0.3, "D3": 0.3},
+    "employee_pii": {"D1": 0.3, "D3": 0.3},
+    "phi":          {"D1": 0.5, "D5": 1.0, "D8": 0.5},
+    "pci":          {"D7": 0.5, "D8": 0.3},
+    "financial":    {"D7": 0.3},
+    "source_code":  {"D1": 0.5},
+    "operational":  {},
+    "none":         {},
+}
+
+
+class IntakeWizard:
+
+    def __init__(self, vendor_name: str):
+        self.vendor_name = vendor_name
+        self.console = Console()
+        self.config = BanditConfig()
+        self.answers = {}
+
+    def run(self) -> dict | None:
+        """
+        Run the full intake wizard.
+        Returns answers dict or None if cancelled.
+        Saves progress after each question.
+        Offers resume if interrupted.
+        """
+        # Check for existing progress
+        saved = self._load_progress()
+        if saved and saved.get("vendor") == self.vendor_name:
+            resume = Confirm.ask(
+                f"\n  Incomplete intake found "
+                f"(completed Q{saved.get('last_q', 0)} "
+                f"of 12). Resume?",
+                default=True
+            )
+            if resume:
+                self.answers = saved.get("answers", {})
+                start_q = saved.get("last_q", 0) + 1
+            else:
+                self._clear_progress()
+                start_q = 1
+        else:
+            start_q = 1
+
+        self.console.print(
+            f"\n  [bold dark_orange]Vendor intake "
+            f"— {self.vendor_name}[/bold dark_orange]"
+            f"\n  [dim]12 questions · "
+            f"takes about 3 minutes[/dim]\n"
+        )
+
+        try:
+            questions = [
+                self._q1_data_types,
+                self._q2_volume,
+                self._q3_environment,
+                self._q4_access,
+                self._q5_sole_source,
+                self._q6_integrations,
+                self._q7_sso,
+                self._q8_ai,
+                self._q9_training,
+                self._q10_criticality,
+                self._q11_spend,
+                self._q12_renewal,
+            ]
+
+            for i, question_fn in enumerate(questions):
+                q_num = i + 1
+                if q_num < start_q:
+                    continue
+                question_fn()
+                self._save_progress(q_num)
+
+            # Data type confirmation check
+            self._check_data_type_consistency()
+
+            self._clear_progress()
+            return self.answers
+
+        except KeyboardInterrupt:
+            self.console.print(
+                f"\n  [yellow]Intake paused at "
+                f"Q{len(self.answers)}.[/yellow]"
+                f"\n  [dim]Run bandit vendor add "
+                f'"{self.vendor_name}" to resume.[/dim]'
+            )
+            return None
+
+    def _q1_data_types(self):
+        """Q1 — Data types (multi-select)"""
+        self.console.print(
+            "  [bold]Q1.[/bold] What data types will "
+            f"{self.vendor_name} process?\n"
+            "  [dim](Select all that apply — "
+            "enter numbers separated by commas)[/dim]\n"
+        )
+        for i, (_, label) in enumerate(Q1_DATA_TYPES):
+            self.console.print(f"  {i+1:2}.  {label}")
+
+        while True:
+            raw = Prompt.ask("\n  Selection").strip()
+            try:
+                indices = [
+                    int(x.strip()) - 1
+                    for x in raw.split(",")
+                    if x.strip()
+                ]
+                if all(
+                    0 <= idx < len(Q1_DATA_TYPES)
+                    for idx in indices
+                ):
+                    self.answers["data_types"] = [
+                        Q1_DATA_TYPES[idx][0]
+                        for idx in indices
+                    ]
+                    break
+                self.console.print(
+                    "  [red]Invalid selection[/red]"
+                )
+            except ValueError:
+                self.console.print(
+                    "  [red]Enter numbers "
+                    "separated by commas[/red]"
+                )
+
+    def _q2_volume(self):
+        """Q2 — Data volume (single select)"""
+        self.console.print(
+            "\n  [bold]Q2.[/bold] Volume of records "
+            f"{self.vendor_name} will access?\n"
+        )
+        for i, (_, label) in enumerate(Q2_VOLUME):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q2_VOLUME)
+        self.answers["data_volume"] = choice
+
+    def _q3_environment(self):
+        """Q3 — Production vs sandbox"""
+        self.console.print(
+            "\n  [bold]Q3.[/bold] Will "
+            f"{self.vendor_name} access production "
+            f"data?\n"
+        )
+        for i, (_, label) in enumerate(Q3_ENVIRONMENT):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q3_ENVIRONMENT)
+        self.answers["environment_access"] = choice
+
+    def _q4_access(self):
+        """Q4 — Access level"""
+        self.console.print(
+            "\n  [bold]Q4.[/bold] What level of "
+            f"access will {self.vendor_name} need?\n"
+        )
+        for i, (_, label) in enumerate(Q4_ACCESS):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q4_ACCESS)
+        self.answers["access_level"] = choice
+
+    def _q5_sole_source(self):
+        """Q5 — Sole source"""
+        self.console.print(
+            f"\n  [bold]Q5.[/bold] Is "
+            f"{self.vendor_name} a sole-source vendor?"
+        )
+        result = Confirm.ask(
+            "  No alternatives exist",
+            default=False
+        )
+        self.answers["sole_source"] = result
+
+    def _q6_integrations(self):
+        """Q6 — System integrations"""
+        all_tools = self.config.get_all_stack_tools()
+
+        if not all_tools:
+            # Tech stack not configured — free text
+            self.console.print(
+                "\n  [bold]Q6.[/bold] Which of your "
+                "systems will "
+                f"{self.vendor_name} integrate with?\n"
+                "  [dim]Tip: Run bandit setup --stack "
+                "to see your actual tools here.[/dim]\n"
+                "  Enter system names separated by "
+                "commas, or press Enter to skip:"
+            )
+            raw = Prompt.ask("  Systems", default="")
+            if raw.strip():
+                # Store as basic integration entries
+                self.answers["integrations"] = [
+                    {
+                        "system_name": name.strip(),
+                        "system_slug": name.strip().lower().replace(" ", "-"),
+                        "category": "general_saas",
+                        "category_label": "Unknown",
+                        "data_description": "business data",
+                    }
+                    for name in raw.split(",")
+                    if name.strip()
+                ]
+            else:
+                self.answers["integrations"] = []
+            return
+
+        # Tech stack configured — show real tools
+        self.console.print(
+            "\n  [bold]Q6.[/bold] Which of your "
+            "systems will "
+            f"{self.vendor_name} have access to?\n"
+            "  [dim](Select all that apply — "
+            "enter numbers, or 0 for none)[/dim]\n"
+        )
+
+        # Group by category label for display
+        sections = {}
+        for tool in all_tools:
+            section = tool.get(
+                "section_label", "Other"
+            )
+            if section not in sections:
+                sections[section] = []
+            sections[section].append(tool)
+
+        display_tools = []
+        for section_name, tools in sections.items():
+            self.console.print(
+                f"  [dim]{section_name.upper()}[/dim]"
+            )
+            for tool in tools:
+                idx = len(display_tools) + 1
+                display_tools.append(tool)
+                self.console.print(
+                    f"  {idx:2}.  "
+                    f"{tool['name']} "
+                    f"[dim]({tool['category_label']})"
+                    f"[/dim]"
+                )
+            self.console.print()
+
+        none_idx = len(display_tools) + 1
+        self.console.print(
+            f"  {none_idx:2}.  None — standalone tool"
+        )
+
+        while True:
+            raw = Prompt.ask("\n  Selection").strip()
+            try:
+                if raw == "0" or raw == str(none_idx):
+                    self.answers["integrations"] = []
+                    break
+
+                indices = [
+                    int(x.strip()) - 1
+                    for x in raw.split(",")
+                    if x.strip()
+                ]
+
+                valid = all(
+                    0 <= idx < len(display_tools)
+                    for idx in indices
+                )
+
+                if valid:
+                    selected = [
+                        display_tools[idx]
+                        for idx in indices
+                    ]
+                    # Build IntegrationEntry-compatible dicts
+                    integrations = []
+                    for tool in selected:
+                        cat = tool.get(
+                            "category", "general_saas"
+                        )
+                        cat_data = CATEGORY_DATA_MAP.get(
+                            cat, {}
+                        )
+                        integrations.append({
+                            "system_name": tool["name"],
+                            "system_slug": tool["slug"],
+                            "category": cat,
+                            "category_label": tool.get(
+                                "category_label", cat
+                            ),
+                            "data_description": cat_data.get(
+                                "data_description",
+                                "business data"
+                            ),
+                        })
+                    self.answers["integrations"] = (
+                        integrations
+                    )
+                    break
+                self.console.print(
+                    "  [red]Invalid selection[/red]"
+                )
+            except ValueError:
+                self.console.print(
+                    "  [red]Enter numbers "
+                    "separated by commas[/red]"
+                )
+
+    def _q7_sso(self):
+        """Q7 — SSO required"""
+        idp = self.config.get_idp_name()
+        through = f" through {idp}" if idp else ""
+
+        self.console.print(
+            f"\n  [bold]Q7.[/bold] Does "
+            f"{self.vendor_name} require SSO setup"
+            f"{through}?\n"
+            "  1.  Yes\n"
+            "  2.  No\n"
+            "  3.  Unknown"
+        )
+        mapping = {"1": True, "2": False, "3": None}
+        while True:
+            choice = Prompt.ask(
+                "\n  Choice", default="3"
+            ).strip()
+            if choice in mapping:
+                self.answers["sso_required"] = (
+                    mapping[choice]
+                )
+                break
+            self.console.print(
+                "  [red]Enter 1, 2, or 3[/red]"
+            )
+
+    def _q8_ai(self):
+        """Q8 — AI in service"""
+        self.console.print(
+            f"\n  [bold]Q8.[/bold] Does "
+            f"{self.vendor_name} use AI or ML "
+            f"in their service?\n"
+        )
+        for i, (_, label) in enumerate(Q8_AI):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q8_AI)
+        self.answers["ai_in_service"] = choice
+
+    def _q9_training(self):
+        """Q9 — AI training (only shown if AI = yes)"""
+        if self.answers.get("ai_in_service") == "no":
+            self.answers["ai_trains_on_data"] = "na"
+            return
+
+        self.console.print(
+            f"\n  [bold]Q9.[/bold] Will your data be "
+            f"used to train {self.vendor_name}'s "
+            f"AI models?\n"
+        )
+        for i, (_, label) in enumerate(Q9_TRAINING):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q9_TRAINING)
+        self.answers["ai_trains_on_data"] = choice
+
+    def _q10_criticality(self):
+        """Q10 — Business criticality"""
+        self.console.print(
+            f"\n  [bold]Q10.[/bold] How critical is "
+            f"{self.vendor_name} to your operations?\n"
+        )
+        for i, (_, label) in enumerate(Q10_CRITICALITY):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q10_CRITICALITY)
+        self.answers["criticality"] = choice
+
+    def _q11_spend(self):
+        """Q11 — Annual spend"""
+        self.console.print(
+            f"\n  [bold]Q11.[/bold] Estimated annual "
+            f"spend with {self.vendor_name}?\n"
+        )
+        for i, (_, label) in enumerate(Q11_SPEND):
+            self.console.print(f"  {i+1}.  {label}")
+
+        choice = self._single_select(Q11_SPEND)
+        self.answers["annual_spend"] = choice
+
+    def _q12_renewal(self):
+        """Q12 — Renewal date"""
+        self.console.print(
+            f"\n  [bold]Q12.[/bold] Contract renewal "
+            f"date for {self.vendor_name}?\n"
+            "  [dim]Format: MM/YYYY "
+            "(or press Enter to skip)[/dim]"
+        )
+        raw = Prompt.ask(
+            "  Renewal date", default=""
+        ).strip()
+
+        if raw:
+            import re
+            if re.match(r"^\d{2}/\d{4}$", raw):
+                self.answers["renewal_date"] = raw
+            else:
+                self.console.print(
+                    "  [yellow]Invalid format — "
+                    "skipping date.[/yellow]"
+                )
+                self.answers["renewal_date"] = None
+        else:
+            self.answers["renewal_date"] = None
+
+    def _check_data_type_consistency(self):
+        """
+        Check if integrations imply higher data
+        sensitivity than stated in Q1.
+        If so, prompt user to confirm or correct.
+        Never silently override.
+        """
+        stated_types = set(
+            self.answers.get("data_types", [])
+        )
+        integrations = self.answers.get(
+            "integrations", []
+        )
+
+        # Check for potential mismatches
+        mismatches = []
+
+        for integration in integrations:
+            cat = integration.get("category", "")
+
+            if (cat == "customer_data"
+                    and "customer_pii" not in stated_types
+                    and "none" not in stated_types):
+                mismatches.append((
+                    integration["system_name"],
+                    "customer PII",
+                    "customer_pii"
+                ))
+
+            if (cat == "hr_people"
+                    and "employee_pii" not in stated_types
+                    and "none" not in stated_types):
+                mismatches.append((
+                    integration["system_name"],
+                    "employee PII",
+                    "employee_pii"
+                ))
+
+            if (cat == "healthcare_clinical"
+                    and "phi" not in stated_types
+                    and "none" not in stated_types):
+                mismatches.append((
+                    integration["system_name"],
+                    "PHI / health data",
+                    "phi"
+                ))
+
+            if (cat == "payments"
+                    and "pci" not in stated_types
+                    and "none" not in stated_types):
+                mismatches.append((
+                    integration["system_name"],
+                    "PCI / payment card data",
+                    "pci"
+                ))
+
+        if not mismatches:
+            return
+
+        self.console.print()
+        for system_name, data_type, type_key in mismatches:
+            self.console.print(
+                f"  [yellow]⚠ Data type check[/yellow]\n"
+                f"  You selected {system_name} as an "
+                f"integration,\n"
+                f"  which typically involves "
+                f"{data_type}.\n\n"
+                f"  1. Add {data_type} to data types "
+                f"(recommended)\n"
+                f"  2. Keep as stated — access is limited "
+                f"to non-personal data\n"
+            )
+            while True:
+                choice = Prompt.ask(
+                    "  Choice", default="1"
+                ).strip()
+                if choice == "1":
+                    current = self.answers.get(
+                        "data_types", []
+                    )
+                    if type_key not in current:
+                        current.append(type_key)
+                    self.answers["data_types"] = current
+                    self.console.print(
+                        f"  [green]✓ Added "
+                        f"{data_type}[/green]"
+                    )
+                    break
+                elif choice == "2":
+                    self.console.print(
+                        "  [dim]Keeping stated "
+                        "data types.[/dim]"
+                    )
+                    break
+                else:
+                    self.console.print(
+                        "  [red]Enter 1 or 2[/red]"
+                    )
+
+    def build_it_actions(self) -> list[str]:
+        """
+        Generate IT action items based on
+        selected integrations.
+        """
+        actions = []
+        idp = self.config.get_idp_name() or "your IdP"
+        integrations = self.answers.get(
+            "integrations", []
+        )
+
+        for integration in integrations:
+            cat = integration.get("category", "")
+            system = integration.get("system_name", "")
+            cat_actions = INTEGRATION_IT_ACTIONS.get(
+                cat, []
+            )
+            for action in cat_actions:
+                formatted = action.format(
+                    system=system,
+                    idp=idp
+                )
+                actions.append(
+                    f"{system}: {formatted}"
+                )
+
+        if self.answers.get("sso_required"):
+            sso_action = (
+                f"SSO setup required through {idp}"
+            )
+            if sso_action not in actions:
+                actions.insert(0, sso_action)
+
+        return actions
+
+    def show_summary(self) -> None:
+        """Show intake summary after completion."""
+        a = self.answers
+
+        def label(options, key):
+            for k, v in options:
+                if k == key:
+                    return v
+            return key or "—"
+
+        data_type_labels = ", ".join(
+            label(Q1_DATA_TYPES, t)
+            for t in a.get("data_types", [])
+        ) or "—"
+
+        integration_names = ", ".join(
+            i["system_name"]
+            for i in a.get("integrations", [])
+        ) or "None"
+
+        self.console.print(
+            f"\n  [bold dark_orange]"
+            f"✓ {self.vendor_name} intake complete"
+            f"[/bold dark_orange]\n"
+        )
+
+        rows = [
+            ("Data types", data_type_labels),
+            ("Volume", label(
+                Q2_VOLUME, a.get("data_volume")
+            )),
+            ("Environment", label(
+                Q3_ENVIRONMENT,
+                a.get("environment_access")
+            )),
+            ("Access", label(
+                Q4_ACCESS, a.get("access_level")
+            )),
+            ("Sole source", (
+                "Yes" if a.get("sole_source")
+                else "No"
+            )),
+            ("Integrations", integration_names),
+            ("AI in service", label(
+                Q8_AI, a.get("ai_in_service")
+            )),
+            ("AI training", label(
+                Q9_TRAINING,
+                a.get("ai_trains_on_data")
+            )),
+            ("Criticality", label(
+                Q10_CRITICALITY,
+                a.get("criticality")
+            )),
+            ("Annual spend", label(
+                Q11_SPEND, a.get("annual_spend")
+            )),
+            ("Renewal", a.get("renewal_date") or "—"),
+        ]
+
+        for key, val in rows:
+            self.console.print(
+                f"  [dim]{key:<16}[/dim] {val}"
+            )
+
+    # ── Helper methods ────────────────────────────
+
+    def _single_select(
+        self, options: list[tuple]
+    ) -> str:
+        """Single selection from numbered list."""
+        while True:
+            raw = Prompt.ask("\n  Choice").strip()
+            try:
+                idx = int(raw) - 1
+                if 0 <= idx < len(options):
+                    return options[idx][0]
+                self.console.print(
+                    f"  [red]Enter 1–"
+                    f"{len(options)}[/red]"
+                )
+            except ValueError:
+                self.console.print(
+                    f"  [red]Enter 1–"
+                    f"{len(options)}[/red]"
+                )
+
+    def _save_progress(self, last_q: int) -> None:
+        PROGRESS_FILE.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        PROGRESS_FILE.write_text(
+            json.dumps({
+                "vendor": self.vendor_name,
+                "last_q": last_q,
+                "answers": self.answers,
+            }, indent=2)
+        )
+
+    def _load_progress(self) -> dict | None:
+        if not PROGRESS_FILE.exists():
+            return None
+        try:
+            return json.loads(
+                PROGRESS_FILE.read_text()
+            )
+        except Exception:
+            return None
+
+    def _clear_progress(self) -> None:
+        if PROGRESS_FILE.exists():
+            PROGRESS_FILE.unlink()
+
+
+def apply_intake_weight_modifiers(
+    base_weights: dict,
+    profile,  # VendorProfile
+    org_profile: dict,
+) -> dict:
+    """
+    Apply intake-derived weight modifiers to
+    base weights. Avoids double-counting with
+    org profile modifiers already applied.
+    """
+    weights = dict(base_weights)
+
+    # Data type modifiers
+    for data_type in (profile.data_types or []):
+        modifiers = INTAKE_DATA_SENSITIVITY.get(
+            data_type, {}
+        )
+        for dim, delta in modifiers.items():
+            org_already_covers = _org_covers(
+                dim, data_type, org_profile
+            )
+            if not org_already_covers:
+                weights[dim] = min(
+                    3.0, weights.get(dim, 1.0) + delta
+                )
+
+    # Integration modifiers
+    for integration in (profile.integrations or []):
+        cat = integration.get("category", "")
+        modifiers = INTEGRATION_WEIGHT_MODIFIERS.get(
+            cat, {}
+        )
+        for dim, delta in modifiers.items():
+            org_already_covers = _org_covers(
+                dim, cat, org_profile
+            )
+            if not org_already_covers:
+                weights[dim] = min(
+                    3.0, weights.get(dim, 1.0) + delta
+                )
+
+    # Admin access modifier
+    if profile.access_level == "admin":
+        weights["D2"] = min(
+            3.0, weights.get("D2", 1.0) + 0.5
+        )
+
+    # Cap all at 3.0
+    return {
+        dim: min(3.0, w)
+        for dim, w in weights.items()
+    }
+
+
+def _org_covers(
+    dimension: str,
+    factor: str,
+    org_profile: dict
+) -> bool:
+    """
+    Returns True if the org profile already
+    accounts for this dimension/factor combination
+    so we don't double-count the modifier.
+    """
+    data_types = org_profile.get("data_types", {})
+    phi_in_scope = data_types.get(
+        "phi_in_scope", False
+    )
+    pci_in_scope = data_types.get(
+        "pci_in_scope", False
+    )
+
+    if factor in ("phi", "healthcare_clinical"):
+        if phi_in_scope and dimension in ("D5", "D8"):
+            return True
+
+    if factor in ("pci", "payments"):
+        if pci_in_scope and dimension == "D7":
+            return True
+
+    return False
+
+
+def build_integration_context_paragraph(
+    profile  # VendorProfile
+) -> str | None:
+    """
+    Build the integration context paragraph
+    injected into Privacy Bandit extraction prompt.
+    Returns None if no integrations.
+    """
+    integrations = profile.integrations
+    if not integrations:
+        return None
+
+    lines = []
+    for i in integrations:
+        lines.append(
+            f"- {i['system_name']} "
+            f"({i['category_label']}): "
+            f"vendor has access to your "
+            f"{i['data_description']}"
+        )
+
+    return (
+        "Additional context: This vendor has access "
+        "to data from these of your systems:\n"
+        + "\n".join(lines)
+        + "\n\nConsider their obligations for data "
+        "they ACCESS from these systems when "
+        "evaluating each dimension. Note these are "
+        "YOUR systems — not this vendor's "
+        "sub-processors."
+    )

@@ -15,7 +15,7 @@ from core.agents.legal_bandit_models import (
     ConflictSeverity,
 )
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 
 def generate_legal_brief(

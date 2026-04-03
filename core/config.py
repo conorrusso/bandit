@@ -531,3 +531,184 @@ class BanditConfig:
         """Return certifications required from vendors."""
         frameworks_cfg = self._cfg.get("frameworks") or {}
         return frameworks_cfg.get("certifications_required") or []
+
+    # ── Tech stack ────────────────────────────────────────────────────
+
+    def get_tech_stack(self) -> dict:
+        """
+        Returns tech stack from config.
+        Empty dict if not configured.
+        """
+        if not self._cfg:
+            return {}
+        return self._cfg.get("tech_stack", {})
+
+    def get_all_stack_tools(self) -> list[dict]:
+        """
+        Returns flat list of all tools across all
+        categories. Used to populate Q6 in intake.
+        """
+        stack = self.get_tech_stack()
+        tools = []
+        for section in stack.values():
+            if isinstance(section, dict):
+                for tools_list in section.values():
+                    if isinstance(tools_list, list):
+                        tools.extend(tools_list)
+        return tools
+
+    def get_idp_name(self) -> str | None:
+        """
+        Returns primary identity provider name.
+        Used to personalise Q7: 'through Okta?'
+        Looks for identity_sso tools in tech stack.
+        """
+        stack = self.get_tech_stack()
+        identity_tools = (
+            stack
+            .get("people_operations", {})
+            .get("identity_sso", [])
+        )
+        if identity_tools:
+            return identity_tools[0]["name"]
+        return None
+
+    def get_it_contact(self) -> dict:
+        """
+        Returns IT contact info for notifications.
+        """
+        if not self._cfg:
+            return {}
+        return self._cfg.get("notifications", {})
+
+    def get_profile(self) -> dict:
+        """Return the raw config dict (used for org profile checks)."""
+        return self._cfg
+
+
+# Maps system category to data sensitivity level
+# and human-readable data description
+CATEGORY_DATA_MAP = {
+    "customer_data": {
+        "sensitivity": "high",
+        "data_description": "customer records and PII",
+    },
+    "payments": {
+        "sensitivity": "high",
+        "data_description": "payment card data",
+    },
+    "hr_people": {
+        "sensitivity": "high",
+        "data_description": "employee PII and HR data",
+    },
+    "identity_access": {
+        "sensitivity": "critical",
+        "data_description": "authentication flows",
+    },
+    "financial_processing": {
+        "sensitivity": "high",
+        "data_description": "financial records",
+    },
+    "infrastructure": {
+        "sensitivity": "critical",
+        "data_description": "hosted workloads and data",
+    },
+    "analytics_bi": {
+        "sensitivity": "high",
+        "data_description": "aggregated analytics data",
+    },
+    "communication": {
+        "sensitivity": "medium",
+        "data_description": "internal communications",
+    },
+    "security_tooling": {
+        "sensitivity": "critical",
+        "data_description": "security data and system access",
+    },
+    "ai_ml": {
+        "sensitivity": "high",
+        "data_description": "data processed by AI systems",
+    },
+    "healthcare_clinical": {
+        "sensitivity": "critical",
+        "data_description": "patient health records (PHI)",
+    },
+    "legal_compliance": {
+        "sensitivity": "high",
+        "data_description": "legal documents and records",
+    },
+    "supply_chain": {
+        "sensitivity": "medium",
+        "data_description": "operational and logistics data",
+    },
+    "general_saas": {
+        "sensitivity": "medium",
+        "data_description": "general business data",
+    },
+}
+
+# IT actions required per integration category
+INTEGRATION_IT_ACTIONS = {
+    "identity_access": [
+        "Configure SAML/OIDC integration in {idp}",
+        "Assign to minimum necessary group in {idp}",
+        "Enforce MFA on vendor application",
+        "Set session timeout policy",
+        "Enable login event logging",
+    ],
+    "analytics_bi": [
+        "Create scoped service account with minimum access",
+        "Implement row-level security where applicable",
+        "Enable query audit logging",
+        "Configure data egress alerts for unusual volume",
+        "Document which datasets are in scope",
+    ],
+    "infrastructure": [
+        "Review shared responsibility scope",
+        "Configure IAM roles with least privilege",
+        "Enable audit logging for vendor access",
+        "Network segmentation review",
+    ],
+    "customer_data": [
+        "Create dedicated API user with minimum permissions",
+        "Scope to specific objects and fields only",
+        "Enable audit trail",
+        "Configure connected app with IP restrictions",
+        "Document which fields are in scope",
+    ],
+    "hr_people": [
+        "Create scoped API integration",
+        "Limit access to minimum necessary fields",
+        "Enable access logging",
+        "Review employee data sharing agreement",
+    ],
+    "source_code": [
+        "Provision scoped repository access only",
+        "Enable audit log for vendor activity",
+        "Rotate any existing tokens",
+        "Review secrets exposure risk",
+    ],
+    "financial_processing": [
+        "Create scoped financial data access",
+        "Enable transaction audit logging",
+        "Review SOX controls if applicable",
+        "Segregation of duties check",
+    ],
+    "communication": [
+        "Configure integration with minimum permissions",
+        "Review message retention settings",
+        "Enable audit logging",
+    ],
+    "healthcare_clinical": [
+        "Network segmentation for PHI systems",
+        "BAA must be signed before access granted",
+        "HIPAA access controls review",
+        "Enable PHI access audit logging",
+    ],
+    "security_tooling": [
+        "Security team review required before access",
+        "Scope access to minimum necessary",
+        "Enable all available audit logging",
+        "Privileged access management review",
+    ],
+}
