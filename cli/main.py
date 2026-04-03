@@ -127,6 +127,7 @@ def main(ctx: click.Context) -> None:
 )
 @click.option("--drive", is_flag=True, default=False, help="Fetch vendor documents from configured Google Drive folder")
 @click.option("--force", is_flag=True, help="Run assessment even if cadence says not due")
+@click.option("--no-legal-brief", is_flag=True, default=False, help="Skip generating the standalone legal brief")
 def assess(
     vendor: tuple,
     model: str,
@@ -137,6 +138,7 @@ def assess(
     docs: str | None,
     drive: bool,
     force: bool,
+    no_legal_brief: bool,
 ) -> None:
     """Assess a vendor's privacy practices.
 
@@ -282,6 +284,44 @@ def assess(
         with assessment_progress(verbose=verbose) as update:
             bandit = PrivacyBandit(provider=provider, on_progress=update)
             assessment = bandit.assess(vendor_str, docs_folder=docs_folder)
+        legal_result = getattr(assessment.result, "legal_bandit_result", None)
+        if legal_result:
+            _CONTRACT_DIMS = {"D2", "D5", "D7", "D8"}
+            changed = [
+                ds for ds in legal_result.dimension_scores
+                if ds.score_changed
+            ]
+            console.print()
+            console.print(
+                "  [bold color(172)]Contract findings[/]"
+                f"  [color(245)](DPA: {legal_result.dpa_source or '—'})[/]"
+            )
+            for ds in changed:
+                arrow = (
+                    "[color(82)]↑[/]" if ds.score_direction == "up"
+                    else "[color(196)]↓[/]"
+                )
+                console.print(
+                    f"    [color(172)]{ds.dimension}[/]  "
+                    f"[color(245)]{ds.policy_score}→{ds.final_score}[/]  "
+                    f"{arrow}  [color(243)]{ds.evidence_summary}[/]"
+                )
+            for c in legal_result.conflicts:
+                console.print(
+                    f"    [color(220)]⚠[/]   [color(245)]{c.dimension} conflict "
+                    f"— policy vs DPA[/]"
+                )
+            console.print(
+                f"  [color(245)]Updated score:[/] "
+                f"[bold]{assessment.result.risk_tier}[/] "
+                f"[bold]{assessment.result.weighted_average}[/]/5.0"
+            )
+        elif docs_folder or drive:
+            console.print(
+                "\n  [color(245)]Legal Bandit — no DPA or MSA found, skipped.[/]\n"
+                "  [color(245)]Provide documents via --docs or --drive to enable "
+                "contract gap analysis.[/]"
+            )
     except KeyboardInterrupt:
         console.print("\n  [bold color(196)]✗[/]  [color(245)]Assessment cancelled.[/]")
         sys.exit(0)
@@ -315,6 +355,20 @@ def assess(
             f"\n  [color(243)]Report saved →[/] [color(172)]{report_path}[/]"
         )
 
+        # ── Legal brief (6A) ──────────────────────────────────────────
+        legal_report_path = None
+        _legal_result = getattr(assessment.result, "legal_bandit_result", None)
+        if _legal_result and not no_legal_brief:
+            from core.reports.legal_report import generate_legal_brief
+            legal_report_path = str(report_path).replace(".html", "-legal.html")
+            generate_legal_brief(
+                result=_legal_result,
+                output_path=legal_report_path,
+            )
+            console.print(
+                f"  [color(243)]Legal brief  →[/] [color(172)]{legal_report_path}[/]"
+            )
+
         # ── Save report to Drive if --drive and auto_save_reports ─────
         if drive:
             try:
@@ -339,6 +393,21 @@ def assess(
                             "  [color(220)]⚠[/]  [color(245)]Could not save to Drive — "
                             f"no folder named '{vendor_str}' found in Drive root.[/]"
                         )
+                    # 6B — save legal brief to Drive
+                    if legal_report_path:
+                        try:
+                            _dc.save_report_to_drive(
+                                local_file_path=legal_report_path,
+                                vendor_name=vendor_str,
+                                parent_folder_id=_drive_cfg["root_folder_id"],
+                            )
+                            console.print(
+                                f"  [color(82)]✓[/]  [color(245)]Legal brief saved to Drive →[/] "
+                                f"[color(172)]{vendor_str}/"
+                                f"{pathlib.Path(legal_report_path).name}[/]"
+                            )
+                        except Exception:
+                            pass
             except Exception as _e:
                 console.print(
                     f"  [color(220)]⚠[/]  [color(245)]Drive save failed: {_e}[/]"
@@ -1052,6 +1121,156 @@ def profile(vendor: str | None, show: bool, unknown: bool) -> None:
         except ImportError:
             pass
         con.print()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# legal
+# ─────────────────────────────────────────────────────────────────────
+
+@main.command()
+@click.argument("vendor")
+@click.option(
+    "--docs",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    metavar="PATH",
+    help="Path to folder containing vendor documents (DPA, MSA, SCCs)",
+)
+@click.option("--drive", is_flag=True, default=False, help="Fetch vendor documents from Google Drive")
+@click.option(
+    "--api-key", default=None, metavar="KEY", envvar="ANTHROPIC_API_KEY",
+    help="Anthropic API key (default: $ANTHROPIC_API_KEY)",
+)
+@click.option(
+    "--model", default="claude-haiku-4-5-20251001", metavar="MODEL", show_default=True,
+    help="Claude model ID",
+)
+def legal(vendor: str, docs: str | None, drive: bool, api_key: str | None, model: str) -> None:
+    """Run Legal Bandit contract gap analysis.
+
+    Reads DPA, MSA, and SCCs and generates a redline brief for legal review.
+
+    \b
+    Examples:
+      bandit legal "Salesforce" --docs ./vendor-docs/Salesforce/
+      bandit legal "Salesforce" --drive
+    """
+    import datetime
+    from cli.terminal import console
+    from core.llm.anthropic import AnthropicProvider
+
+    if not api_key:
+        console.print(
+            "[bold red]Error:[/] ANTHROPIC_API_KEY not set.\n"
+            "Set the environment variable or pass [color(220)]--api-key <key>[/]."
+        )
+        sys.exit(1)
+
+    if not docs and not drive:
+        console.print(
+            "  [color(220)]⚠[/]  No document source specified.\n"
+            "  Provide documents via:\n"
+            "  [color(220)]bandit legal \"Vendor\" --docs ./vendor-docs/[/]\n"
+            "  [color(220)]bandit legal \"Vendor\" --drive[/]"
+        )
+        sys.exit(1)
+
+    provider = AnthropicProvider(model=model, api_key=api_key)
+
+    # Resolve docs folder
+    docs_folder = docs
+    _drive_tmp = None
+    if drive and not docs_folder:
+        try:
+            from core.config import load_config
+            from core.integrations.google_drive import GoogleDriveClient
+            _cfg = load_config() or {}
+            _drive_cfg = _cfg.get("integrations", {}).get("google_drive", {})
+            _folder_id = _drive_cfg.get("root_folder_id")
+            if not _folder_id:
+                console.print(
+                    "\n  [color(196)]✗[/]  Google Drive not configured.\n"
+                    "     Run [color(220)]bandit setup --drive[/] to connect."
+                )
+                sys.exit(1)
+            import tempfile
+            _drive_tmp = tempfile.mkdtemp(prefix="bandit_legal_drive_")
+            _dc = GoogleDriveClient()
+            _dc.authenticate()
+            _local_paths = _dc.download_vendor_documents(
+                vendor_name=vendor,
+                parent_folder_id=_folder_id,
+                temp_dir=_drive_tmp,
+            )
+            if _local_paths:
+                docs_folder = _drive_tmp
+            else:
+                console.print(
+                    f"  [color(245)]No Drive documents found for {vendor}.[/]"
+                )
+                sys.exit(1)
+        except Exception as exc:
+            console.print(f"  [color(245)]Drive error: {exc}[/]")
+            sys.exit(1)
+
+    try:
+        from core.documents.ingestor import DocumentIngestor
+        from core.documents.classifier import DocumentType
+        from core.agents.legal_bandit import LegalBandit
+        from core.reports.legal_report import generate_legal_brief
+
+        console.print(f"\n  [bold color(172)]LEGAL BANDIT[/]  [color(245)]{vendor}[/]\n")
+        console.print("  [color(245)]Ingesting documents…[/]")
+
+        ingestor = DocumentIngestor(llm_provider=provider)
+        manifest = ingestor.ingest_folder(docs_folder)
+        ready_docs = [
+            d for d in manifest.documents
+            if d.extraction_ok and d.doc_type != DocumentType.UNKNOWN
+        ]
+
+        if not ready_docs:
+            console.print("  [color(220)]⚠[/]  No documents could be extracted.")
+            sys.exit(1)
+
+        console.print(f"  [color(82)]✓[/]  {len(ready_docs)} document(s) ready")
+        console.print("  [color(245)]Running Art. 28(3) checklist…[/]")
+
+        lb = LegalBandit(provider)
+        legal_result = lb.assess(
+            vendor_name=vendor,
+            documents=ready_docs,
+            policy_signals={},
+            policy_scores={},
+        )
+
+        if not legal_result:
+            console.print(
+                "  [color(220)]⚠[/]  No DPA or MSA found in documents.\n"
+                "  [color(245)]Legal Bandit requires at least a DPA or MSA.[/]"
+            )
+            sys.exit(1)
+
+        reports_dir = pathlib.Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        slug = _vendor_slug(vendor)
+        brief_path = str(
+            reports_dir / f"{slug}-{datetime.date.today().isoformat()}-legal.html"
+        )
+        generate_legal_brief(result=legal_result, output_path=brief_path)
+
+        console.print(
+            f"\n  [color(82)]✓[/]  Required:    {legal_result.required_changes}\n"
+            f"  [color(82)]✓[/]  Recommended: {legal_result.recommended_changes}\n"
+            f"  [color(82)]✓[/]  Acceptable:  {legal_result.acceptable_provisions}\n"
+            f"  [color(82)]✓[/]  Conflicts:   {legal_result.conflicts_count}\n"
+            f"\n  [color(243)]Legal brief →[/] [color(172)]{brief_path}[/]"
+        )
+
+    finally:
+        if _drive_tmp:
+            import shutil
+            shutil.rmtree(_drive_tmp, ignore_errors=True)
 
 
 # ─────────────────────────────────────────────────────────────────────

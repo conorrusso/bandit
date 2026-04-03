@@ -16,7 +16,7 @@ import datetime
 import pathlib
 from typing import TYPE_CHECKING
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 if TYPE_CHECKING:
     from core.agents.privacy_bandit import PrivacyAssessment
@@ -359,10 +359,28 @@ def _bar_html(score: int, color: str, width: int = 80) -> str:
 # Dimension section HTML
 # ─────────────────────────────────────────────────────────────────────
 
-def _dim_section(dim_key: str, dr, result_red_flags: list[dict], signal_sources: dict | None = None) -> str:
+def _dim_section(
+    dim_key: str,
+    dr,
+    result_red_flags: list[dict],
+    signal_sources: dict | None = None,
+    legal_dim_score=None,
+    legal_provisions: dict | None = None,
+) -> str:
     score = dr.capped_score
     color = _SCORE_COLOR[min(score, 5)]
     wt_badge = f' <span style="color:#8B5A2B;font-size:10px">×{dr.weight:.1f}</span>' if dr.weight != 1.0 else ""
+
+    # 7A — contract score source indicator
+    contract_badge = ""
+    if legal_dim_score and legal_dim_score.score_changed:
+        arrow = "↑" if legal_dim_score.score_direction == "up" else "↓"
+        src_color = "#1A5C2A" if legal_dim_score.score_direction == "up" else "#8B1A1A"
+        prev = legal_dim_score.policy_score
+        contract_badge = (
+            f' <span style="color:{src_color};font-size:10px;font-weight:700">'
+            f'[Contract {arrow} from Policy {prev}/5]</span>'
+        )
 
     # ── Excluded dimension (e.g. D8 when public_policy_only) ──────────
     if getattr(dr, "is_excluded", False):
@@ -474,11 +492,65 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict], signal_sources:
             '</div>'
         )
 
+    # 7B — contract language sub-section
+    contract_lang_html = ""
+    if legal_provisions and dim_key in {"D2", "D5", "D7", "D8"}:
+        dim_prov_ids = {
+            "D2": ["art28_3d_sub_processors"],
+            "D5": ["breach_notification"],
+            "D7": ["art28_3g_deletion_return"],
+            "D8": [
+                "art28_3a_instructions", "art28_3b_confidentiality",
+                "art28_3c_security", "art28_3d_sub_processors",
+                "art28_3e_dsar_assistance", "art28_3f_dpia_assistance",
+                "art28_3g_deletion_return", "art28_3h_audit_rights",
+            ],
+        }.get(dim_key, [])
+
+        lang_items = ""
+        for pid in dim_prov_ids:
+            prov = legal_provisions.get(pid)
+            if not prov:
+                continue
+            from core.agents.legal_bandit_models import ProvisionStatus
+            if prov.verbatim_quote:
+                is_vague = prov.status == ProvisionStatus.PRESENT_VAGUE
+                vague_note = (
+                    '<div style="color:#8B1A1A;font-size:10px;margin-top:3px">'
+                    '⚠ Vague — not enforceable</div>'
+                    if is_vague else ""
+                )
+                ref = (
+                    f'<span style="color:#8B5A2B;font-size:10px">'
+                    f' — {_h(prov.section_reference)}</span>'
+                    if prov.section_reference else ""
+                )
+                lang_items += (
+                    f'<div style="margin-bottom:8px;padding:8px 10px;'
+                    f'background:#F8F5F0;border-left:2px solid #D4C9B8;'
+                    f'border-radius:0 3px 3px 0;font-size:11px">'
+                    f'<div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">'
+                    f'{_h(prov.provision_name)}{ref}</div>'
+                    f'<div style="font-style:italic">'
+                    f'&ldquo;{_h(prov.verbatim_quote[:200])}'
+                    f'{"…" if len(prov.verbatim_quote) > 200 else ""}'
+                    f'&rdquo;</div>'
+                    f'{vague_note}'
+                    f'</div>'
+                )
+        if lang_items:
+            contract_lang_html = (
+                f'<div class="sub-sec">'
+                f'<h4 class="sh">Contract language</h4>'
+                f'{lang_items}'
+                f'</div>'
+            )
+
     return f"""
 <details class="dim-det">
   <summary class="dim-sum">
     <span class="dk-lbl">{_h(dim_key)}{wt_badge}</span>
-    <span class="dn-lbl">{_h(dr.name)}</span>
+    <span class="dn-lbl">{_h(dr.name)}{contract_badge}</span>
     <span class="bar-cell">{bar}</span>
     <span class="ds-lbl" style="color:{color}">{score}/5</span>
     <span class="dl-lbl" style="color:{color}">{_h(dr.level_label)}</span>
@@ -486,7 +558,7 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict], signal_sources:
   </summary>
   <div class="dim-body">
     <div class="dim-grid">
-      <div>{ev_html}{gap_html}{pa_html}</div>
+      <div>{ev_html}{gap_html}{pa_html}{contract_lang_html}</div>
       <div>{rf_html}{q_html}{cr_html}</div>
     </div>
   </div>
@@ -497,7 +569,7 @@ def _dim_section(dim_key: str, dr, result_red_flags: list[dict], signal_sources:
 # Team summary panels
 # ─────────────────────────────────────────────────────────────────────
 
-def _team_summary(result, assessment) -> str:
+def _team_summary(result, assessment, legal_brief_path: str | None = None) -> str:
     _GRC_DECISION = {
         "HIGH":   ("Escalate",                "#C0392B", "Do not proceed to contract. Escalate to security review board."),
         "MEDIUM": ("Approve with conditions",  "#D4A017", "Address flagged gaps before go-live. Negotiate DPA improvements."),
@@ -575,6 +647,28 @@ def _team_summary(result, assessment) -> str:
   </div>
 </div>"""
 
+    legal_result = getattr(result, "legal_bandit_result", None)
+
+    # 7D — Legal Bandit summary header
+    legal_brief_summary = ""
+    if legal_result:
+        brief_link = (
+            f' &nbsp;<a href="{_h(legal_brief_path)}" style="color:#1A3A2A">'
+            f'Open legal brief →</a>'
+            if legal_brief_path else ""
+        )
+        legal_brief_summary = (
+            f'<div style="margin-bottom:12px;padding:10px;'
+            f'background:rgba(26,58,42,.06);border-radius:3px;'
+            f'border:1px solid #A8D5A8">'
+            f'{row("Required changes", f"{legal_result.required_changes} — resolve before signing", "#8B1A1A" if legal_result.required_changes else "")}'
+            f'{row("Recommended", f"{legal_result.recommended_changes} — negotiate if possible")}'
+            f'{row("Conflicts", f"{legal_result.conflicts_count} — policy unbacked by DPA", "#7A2A7A" if legal_result.conflicts_count else "")}'
+            f'<div style="font-size:11px;color:#6B5B4E;padding:4px 0">'
+            f'Full legal brief:{brief_link}</div>'
+            f'</div>'
+        )
+
     legal_items = ""
     for dim_key, dr in result.dimensions.items():
         if dr.capped_score <= 3 and dim_key in _DIM_CONTRACT:
@@ -589,7 +683,7 @@ def _team_summary(result, assessment) -> str:
 
     legal = f"""<div class="tp">
   <div class="tp-hdr" style="background:#1A3A2A">FOR LEGAL</div>
-  <div class="tp-body">{legal_items}</div>
+  <div class="tp-body">{legal_brief_summary}{legal_items}</div>
 </div>"""
 
     sec_dims = ["D5", "D6", "D8"]
@@ -697,6 +791,7 @@ def write_html_report(
     result  = assessment.result
     sources = assessment.sources
     ts = timestamp or datetime.datetime.now().strftime("%Y-%m-%d %H:%M UTC")
+    legal_result = getattr(result, "legal_bandit_result", None)
 
     tier_color = _TIER_COLOR.get(result.risk_tier, "#8B5A2B")
 
@@ -721,8 +816,22 @@ def write_html_report(
 
     # ── Dimension sections ────────────────────────────────────────────
     _signal_sources = getattr(result, "signal_sources", {})
+    # Build Legal Bandit lookup dicts for per-dimension enrichment
+    _legal_dim_scores = {}
+    _legal_provisions = {}
+    if legal_result:
+        _legal_dim_scores = {
+            ds.dimension: ds for ds in legal_result.dimension_scores
+        }
+        for prov in legal_result.provisions:
+            _legal_provisions[prov.provision_id] = prov
     dims_html = "\n".join(
-        _dim_section(k, dr, result.red_flags, signal_sources=_signal_sources)
+        _dim_section(
+            k, dr, result.red_flags,
+            signal_sources=_signal_sources,
+            legal_dim_score=_legal_dim_scores.get(k),
+            legal_provisions=_legal_provisions,
+        )
         for k, dr in result.dimensions.items()
     )
 
@@ -741,6 +850,21 @@ def write_html_report(
         + "</ul>"
         if result.framework_evidence else '<p class="none-p">None detected.</p>'
     )
+
+    # ── Policy/contract conflict banner (7C) ─────────────────────────
+    conflict_banner = ""
+    if legal_result and legal_result.conflicts:
+        conflict_banner = (
+            '<div style="background:#F8EAF8;border:1px solid #D4A0D4;'
+            'border-radius:4px;padding:12px 16px;margin-bottom:16px;'
+            'font-size:12px;">'
+            '<span style="font-weight:700;color:#7A2A7A">'
+            '⚠ POLICY/CONTRACT CONFLICTS DETECTED</span><br>'
+            f'<span style="color:#5A1A5A">{legal_result.conflicts_count} '
+            'case(s) where policy implies more than the DPA commits. '
+            'See legal brief for details.</span>'
+            '</div>'
+        )
 
     # ── Escalation banner ─────────────────────────────────────────────
     escalation_banner = ""
@@ -802,6 +926,11 @@ def write_html_report(
             if weight_notes else ""
         )
         profile_line = f'<div class="prof-line">Profile: {_h(active_profile)}</div>{wt_str}'
+
+    # Pre-compute team summary so legal_brief_path can be threaded in
+    # (legal_brief_path is not available in write_html_report scope yet —
+    # we pass None here; the For Legal link is best-effort)
+    team_summary_html = _team_summary(result, assessment)
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -972,6 +1101,7 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 <body>
 
 {escalation_banner}
+{conflict_banner}
 
 <div class="hdr">
   <div>
@@ -996,7 +1126,7 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 {fw_html}
 
 <h2>Team Summary</h2>
-{_team_summary(result, assessment)}
+{team_summary_html}
 
 <h2>Pages Analysed</h2>
 <table>

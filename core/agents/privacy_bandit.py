@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from core.agents.base_bandit import BaseBandit
+from core.agents.legal_bandit import LegalBandit
 from core.llm.base import BaseLLMProvider
+from core.reports.legal_report import generate_legal_brief
 from core.scoring.rubric import (
     RUBRIC,
     AssessmentResult,
@@ -421,6 +423,73 @@ class PrivacyBandit(BaseBandit):
 
         result.documents_assessed = documents_assessed
         result.signal_sources = signal_sources
+
+        # ── Phase 4: Legal Bandit (contract gap analysis) ─────────────
+        legal_result = None
+        if ready_docs:
+            self._progress("Phase 3/4  Legal Bandit — contract gap analysis…")
+            legal_bandit = LegalBandit(self.provider)
+
+            # Build flat policy_scores dict for Legal Bandit
+            policy_scores = {
+                dim: dr.capped_score
+                for dim, dr in result.dimensions.items()
+            }
+
+            # Build flat policy_signals for conflict detection
+            flat_signals: dict = {}
+            for dim_signals in per_dim.values():
+                flat_signals.update(dim_signals)
+
+            legal_result = legal_bandit.assess(
+                vendor_name=vendor,
+                documents=ready_docs,
+                policy_signals=flat_signals,
+                policy_scores=policy_scores,
+            )
+
+        if legal_result:
+            # Update dimension scores from contract assessment
+            for dim_score in legal_result.dimension_scores:
+                if dim_score.score_changed and dim_score.dimension in result.dimensions:
+                    result.dimensions[dim_score.dimension].capped_score = (
+                        dim_score.final_score
+                    )
+
+            # Recalculate weighted average with updated scores
+            from core.scoring.rubric import RUBRIC, classify_risk
+            _included = [
+                k for k, dr in result.dimensions.items()
+                if not dr.is_excluded
+            ]
+            if _included:
+                total_weight = sum(
+                    result.dimensions[k].weight for k in _included
+                )
+                weighted_sum = sum(
+                    result.dimensions[k].capped_score
+                    * result.dimensions[k].weight
+                    for k in _included
+                )
+                result.weighted_average = (
+                    round(weighted_sum / total_weight, 1)
+                    if total_weight else result.weighted_average
+                )
+                result.risk_tier = classify_risk(result.weighted_average)
+
+            # Merge escalation from Legal Bandit
+            if legal_result.escalation_required:
+                result.escalation_required = True
+                result.escalation_reasons.extend(
+                    legal_result.escalation_reasons
+                )
+
+            # Store legal result on assessment result
+            result.legal_bandit_result = legal_result
+        elif ready_docs:
+            self._progress(
+                "Phase 3/4  Legal Bandit — no DPA or MSA found, skipped."
+            )
 
         return PrivacyAssessment(result=result, sources=list(self._fetch_meta))
 

@@ -1069,6 +1069,7 @@ class AssessmentResult:
     assessment_scope: str = "public_policy_only"
     documents_assessed: list[str] = field(default_factory=list)
     signal_sources: dict = field(default_factory=dict)
+    legal_bandit_result: Any = None  # LegalBanditResult | None
 
 
 def _score_dimension(

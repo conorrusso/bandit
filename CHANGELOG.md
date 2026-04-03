@@ -6,6 +6,45 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## [1.2.0] — 2026-04-02
+
+### Added
+
+**Legal Bandit — Contract Gap Analysis**
+- New agent: `core/agents/legal_bandit.py`
+- Full GDPR Art. 28(3)(a)-(h) checklist against DPA
+- Verbatim quote extraction per provision
+- Vague language detection ("appropriate measures" etc)
+- Policy/contract conflict detection
+- Contract-based score updates for D2, D5, D7, D8
+- MSA commercial data protection term assessment
+- SCC version and completeness check
+- Outdated SCC detection (pre-2021)
+
+**Legal Redline Brief**
+- New report: `core/reports/legal_report.py`
+- Standalone HTML brief for legal team
+- Required / Recommended / Acceptable sections
+- Current contract language verbatim per provision
+- Specific redline replacement language
+- Enforcement precedents per gap
+- Policy/contract conflict section
+- MSA commercial terms summary
+- Disclaimer (not legal advice)
+
+**CLI**
+- `bandit assess` now runs Legal Bandit automatically when DPA or MSA documents are available
+- `bandit legal` command for standalone legal assessment
+- `--no-legal-brief` flag to skip brief generation
+- Terminal shows contract findings and score changes after assessment
+- Score changes shown: `D5 1→4 ↑ Contract`
+
+**Reports**
+- Main report enriched with contract language per dimension
+- Score source shown (Policy / Contract) in dimension headers
+- Conflict banner when policy/DPA conflicts detected
+- For Legal panel updated with brief summary
+
 ## [Unreleased]
 
 ---
