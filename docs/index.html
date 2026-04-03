@@ -1,956 +1,641 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Bandit — Vendor Risk Intelligence Suite</title>
-  <meta name="description" content="Open-source AI agent for vendor privacy risk assessment. Provider-agnostic. Free forever. Scores vendors across 8 GDPR/CCPA dimensions with a published, enforcement-grounded rubric."/>
-  <meta property="og:title" content="Bandit — Vendor Risk Intelligence Suite"/>
-  <meta property="og:description" content="Open-source AI agent for vendor risk assessment. Free forever. Use Claude, GPT-4o, Gemini, or run fully local with Ollama."/>
-  <meta property="og:type" content="website"/>
-  <style>
-    /* ── Reset ─────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body { background: #F4EFE4; font-family: 'Courier New', Courier, monospace; color: #1A1510; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bandit — Vendor Risk Intelligence Suite</title>
+<meta name="description" content="Open-source AI agent for vendor privacy risk assessment. Provider-agnostic. Free forever."/>
+<meta property="og:title" content="Bandit — Vendor Risk Intelligence Suite"/>
+<meta property="og:description" content="Open-source AI agent for vendor risk assessment. Free forever. Use Claude, GPT-4o, Gemini, or run fully local with Ollama."/>
+<meta property="og:type" content="website"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=Press+Start+2P&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --warm-white: #faf8f4;
+  --ink: #1a1814;
+  --ink-muted: #6a6258;
+  --ink-faint: #9a9288;
+  --amber: #e8922c;
+  --green: #3aaa5c;
+  --red: #d04444;
+  --blue: #4488cc;
+  --purple: #7a5cb8;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans',sans-serif; color:var(--ink); background:var(--warm-white); overflow-x:hidden; }
+.px { image-rendering:pixelated; image-rendering:-moz-crisp-edges; image-rendering:crisp-edges; }
 
-    /* ── Tokens ─────────────────────────────────────────────────── */
-    :root {
-      --cream:   #F4EFE4;
-      --cream2:  #EDE7DA;
-      --border:  #D0C8B8;
-      --ink:     #1A1510;
-      --muted:   #6B5C44;
-      --hint:    #8B7A5A;
-      --brown:   #8B5A2B;
-      --gold:    #C8901C;
-      --dark:    #2E1C0C;
-    }
+nav { position:fixed; top:0; width:100%; z-index:100; padding:16px 32px; display:flex; justify-content:space-between; align-items:center; background:rgba(250,248,244,0.92); backdrop-filter:blur(12px); border-bottom:1px solid rgba(0,0,0,0.06); }
+.nav-logo { font-family:'Press Start 2P',monospace; font-size:11px; color:var(--ink); text-decoration:none; }
+.nav-logo span { color:var(--amber); }
+.nav-links { display:flex; gap:28px; align-items:center; }
+.nav-links a { font-size:14px; color:var(--ink-muted); text-decoration:none; font-weight:500; }
+.nav-cta { background:var(--ink)!important; color:var(--warm-white)!important; padding:8px 20px; border-radius:6px; font-size:13px!important; }
 
-    /* ── Nav ────────────────────────────────────────────────────── */
-    nav {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 40px; border-bottom: 1.5px solid var(--border);
-      background: var(--cream); position: sticky; top: 0; z-index: 100;
-    }
-    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .nav-wordmark { font-size: 18px; font-weight: 700; letter-spacing: .08em; color: var(--ink); }
-    .nav-sub { font-size: 9px; color: var(--hint); letter-spacing: .14em; text-transform: uppercase; margin-top: 1px; }
-    .nav-links { display: flex; gap: 24px; list-style: none; }
-    .nav-links a { font-size: 12px; color: var(--muted); text-decoration: none; letter-spacing: .04em; }
-    .nav-links a:hover { color: var(--ink); }
-    .nav-cta {
-      background: var(--ink); color: var(--cream); border: none; border-radius: 3px;
-      padding: 8px 16px; font-family: inherit; font-size: 11px; font-weight: 700;
-      letter-spacing: .09em; cursor: pointer; text-decoration: none; display: inline-block;
-    }
-    .nav-cta:hover { background: #3A2C1C; }
+.hero { padding:120px 40px 0; text-align:center; }
+.hero-label { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--amber); letter-spacing:2px; text-transform:uppercase; margin-bottom:20px; }
+.hero h1 { font-size:clamp(32px,5vw,52px); font-weight:700; line-height:1.15; max-width:680px; margin:0 auto 20px; }
+.hero p { font-size:18px; line-height:1.6; color:var(--ink-muted); max-width:540px; margin:0 auto 36px; }
+.hero-buttons { display:flex; gap:12px; justify-content:center; }
+.btn-primary { background:var(--ink); color:var(--warm-white); padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:500; font-size:15px; display:inline-block; }
+.btn-secondary { background:transparent; color:var(--ink); padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:500; font-size:15px; border:1.5px solid rgba(0,0,0,0.12); }
 
-    /* ── Hero ───────────────────────────────────────────────────── */
-    .hero {
-      padding: 80px 40px 72px;
-      background-color: var(--cream);
-      background-image: radial-gradient(circle, #B8AA90 1.2px, transparent 1.2px);
-      background-size: 22px 22px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .hero-text { max-width: 640px; }
-    .eyebrow {
-      display: inline-block; font-size: 10px; font-weight: 700;
-      letter-spacing: .18em; color: #8B6A3A; text-transform: uppercase;
-      border: 1.5px solid #C0A870; border-radius: 2px; padding: 4px 10px; margin-bottom: 20px;
-    }
-    .punchline { font-size: 10px; font-weight: 700; color: var(--hint); letter-spacing: .1em; margin-bottom: 10px; line-height: 1.5; }
-    .hero-title { font-size: 100px; font-weight: 700; line-height: .88; letter-spacing: -.02em; margin-bottom: 10px; }
-    .hero-tag { font-size: 12px; color: var(--hint); letter-spacing: .22em; text-transform: uppercase; margin-bottom: 24px; }
-    .hero-desc { font-size: 14px; color: #5C4C38; line-height: 1.8; font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto 32px; }
-    .hero-btns { display: flex; gap: 11px; flex-wrap: wrap; justify-content: center; }
-    .btn-primary {
-      background: var(--ink); color: var(--cream); border: none; border-radius: 3px;
-      padding: 12px 26px; font-family: inherit; font-size: 11px; font-weight: 700;
-      letter-spacing: .08em; cursor: pointer; text-decoration: none; display: inline-block;
-    }
-    .btn-primary:hover { background: #3A2C1C; }
-    .btn-ghost {
-      background: transparent; color: var(--ink); border: 1.5px solid var(--border);
-      border-radius: 3px; padding: 12px 26px; font-family: inherit; font-size: 11px;
-      font-weight: 700; letter-spacing: .08em; cursor: pointer; text-decoration: none;
-      display: inline-block;
-    }
-    .btn-ghost:hover { border-color: var(--hint); }
+.hero-art { display:flex; justify-content:center; align-items:flex-end; padding:40px 20px 0; max-width:1100px; margin:0 auto; }
 
-    /* ── Rooftop scene (full bleed, fades in from cream) ────────── */
-    .scene-section {
-      position: relative; overflow: hidden; line-height: 0;
-      margin: 0; padding: 0;
-    }
-    .scene-section::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0;
-      height: 120px; z-index: 1; pointer-events: none;
-      background: linear-gradient(to bottom, #F4EFE4 0%, transparent 100%);
-    }
-    .scene-section svg { display: block; width: 100%; height: auto; }
+.content-section { padding:64px 40px; max-width:960px; margin:0 auto; }
+.content-section h2 { font-size:32px; font-weight:700; margin-bottom:12px; }
+.content-section .lead { font-size:17px; color:var(--ink-muted); line-height:1.6; max-width:560px; margin-bottom:40px; }
+.feature-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+.feature-card { padding:24px; background:var(--warm-white); border:1px solid rgba(0,0,0,0.06); border-radius:12px; }
+.feature-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'Press Start 2P',monospace; font-size:11px; margin-bottom:14px; }
+.feature-card h3 { font-size:16px; font-weight:600; margin-bottom:6px; }
+.feature-card p { font-size:14px; color:var(--ink-muted); line-height:1.5; }
 
-    /* ── Problem strip ──────────────────────────────────────────── */
-    .strip {
-      background: var(--cream2); border-top: 1.5px solid var(--border);
-      border-bottom: 1.5px solid var(--border); padding: 48px 40px;
-    }
-    .section-label {
-      font-size: 10px; font-weight: 700; letter-spacing: .18em; color: #8B6A3A;
-      text-transform: uppercase; text-align: center; margin-bottom: 8px;
-    }
-    .section-h2 {
-      font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 36px;
-      max-width: 500px; margin-left: auto; margin-right: auto; line-height: 1.3;
-    }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; max-width: 800px; margin: 0 auto; }
-    .card {
-      background: var(--cream); border: 1.5px solid var(--border); border-radius: 6px; padding: 18px 14px;
-    }
-    .card-title { font-size: 12px; font-weight: 700; color: var(--ink); letter-spacing: .05em; margin-bottom: 5px; }
-    .card-desc { font-size: 12px; color: var(--muted); line-height: 1.6; font-family: system-ui, sans-serif; }
+.divider { border:none; border-top:1px solid rgba(0,0,0,0.06); max-width:960px; margin:0 auto; }
 
-    /* ── Crew ───────────────────────────────────────────────────── */
-    .crew { padding: 52px 40px; }
-    .crew-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px; max-width: 900px; margin: 0 auto;
-    }
-    .crew-card {
-      background: var(--cream); border: 1.5px solid var(--border); border-radius: 6px;
-      padding: 18px 10px 14px; text-align: center; transition: border-color .15s;
-    }
-    .crew-card:hover { border-color: var(--hint); }
-    .crew-card.live { border: 2px solid var(--brown); }
-    .crew-card.dim { opacity: .55; }
-    .crew-avatar { display: block; margin: 0 auto 10px; }
-    .crew-code { font-size: 10px; font-weight: 700; letter-spacing: .13em; color: var(--brown); margin-bottom: 3px; }
-    .crew-role { font-size: 11px; font-weight: 700; margin-bottom: 5px; }
-    .crew-desc { font-size: 11px; color: var(--muted); font-family: system-ui, sans-serif; line-height: 1.5; margin-bottom: 8px; }
-    .badge { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .1em; border-radius: 2px; padding: 2px 7px; }
-    .badge-live { background: #D4EDDA; color: #1A5C2A; border: 1px solid #8BC49A; }
-    .badge-soon { background: var(--cream2); color: var(--muted); border: 1px solid var(--border); }
+.principles { padding:64px 40px; max-width:960px; margin:0 auto; }
+.principle-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:40px; }
+.principle-item .label { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--amber); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:10px; }
+.principle-item h3 { font-size:19px; font-weight:700; margin-bottom:6px; }
+.principle-item p { font-size:14px; color:var(--ink-muted); line-height:1.6; }
 
-    /* ── What you get ───────────────────────────────────────────── */
-    .wyg-section { padding: 52px 40px; background: var(--cream2); border-top: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border); }
-    .wyg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; max-width: 900px; margin: 0 auto; }
-    .wyg-card { background: var(--cream); border: 1.5px solid var(--border); border-radius: 6px; padding: 20px 16px; }
-    .wyg-icon { font-size: 20px; margin-bottom: 8px; }
-    .wyg-title { font-size: 12px; font-weight: 700; color: var(--ink); letter-spacing: .05em; margin-bottom: 6px; }
-    .wyg-desc { font-size: 12px; color: var(--muted); line-height: 1.6; font-family: system-ui, sans-serif; }
+.crew-section { padding:64px 40px; max-width:960px; margin:0 auto; }
+.crew-section h2 { font-size:32px; font-weight:700; margin-bottom:8px; }
+.crew-section .lead { color:var(--ink-muted); font-size:16px; margin-bottom:32px; }
+.crew-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+.crew-card { background:var(--warm-white); border:1px solid rgba(0,0,0,0.06); border-radius:12px; padding:20px; text-align:center; }
+.crew-card .icon { font-family:'Press Start 2P',monospace; font-size:16px; margin-bottom:10px; display:block; }
+.crew-card h3 { font-family:'JetBrains Mono',monospace; font-size:12px; margin-bottom:4px; }
+.crew-card p { font-size:13px; color:var(--ink-muted); margin-bottom:8px; }
+.tag-live { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--green); padding:2px 8px; background:rgba(58,170,92,0.08); border-radius:4px; }
+.tag-soon { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--ink-faint); padding:2px 8px; background:rgba(0,0,0,0.03); border-radius:4px; }
 
-    /* ── Install strip ──────────────────────────────────────────── */
-    .install-section { padding: 52px 40px; background: var(--ink); }
-    .install-section .section-label { color: #8B6A3A; }
-    .install-section .section-h2 { color: var(--cream); }
-    .install-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 1100px; margin: 0 auto 32px; }
-    .install-step { min-width: 0; }
-    .install-step-label { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #8B6A3A; text-transform: uppercase; margin-bottom: 6px; }
-    .install-code { background: #0E0A06; border: 1px solid #3A2A18; border-radius: 4px; padding: 14px; font-family: 'Courier New', monospace; font-size: 13px; color: #C8A860; white-space: pre; overflow-x: auto; overflow-y: hidden; min-width: 0; word-break: normal; }
-    @media (max-width: 700px) { .install-steps { grid-template-columns: 1fr; } }
+.cta-section { padding:64px 40px; text-align:center; }
+.cta-section h2 { font-size:28px; font-weight:700; margin-bottom:10px; }
+.cta-section p { color:var(--ink-muted); font-size:16px; margin-bottom:28px; }
+.cta-section .btn-primary { background:var(--amber); color:var(--ink); }
 
-    /* ── Tagline ────────────────────────────────────────────────── */
-    .tagline-section { padding: 52px 40px; text-align: center; }
-    .tagline-h { font-size: 30px; font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
-    .tagline-h span { color: var(--brown); }
-    .tagline-sub { font-size: 13px; color: var(--hint); margin-top: 10px; font-family: system-ui, sans-serif; letter-spacing: .04em; }
-    .tagline-cta { margin-top: 28px; }
+footer { padding:40px; text-align:center; border-top:1px solid rgba(0,0,0,0.06); }
+footer a { color:var(--ink-faint); text-decoration:none; font-size:13px; margin:0 14px; }
+footer .copy { font-size:12px; color:var(--ink-faint); margin-top:12px; }
 
-    /* ── Rubric section ─────────────────────────────────────────── */
-    .rubric-section { padding: 52px 40px; background: var(--cream); }
-    .rubric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; max-width: 900px; margin: 0 auto; }
-    .rubric-card { background: var(--cream2); border: 1.5px solid var(--border); border-radius: 6px; padding: 14px 12px; }
-    .rubric-dim { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--brown); margin-bottom: 4px; }
-    .rubric-name { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
-    .rubric-cite { font-size: 11px; color: var(--muted); font-family: system-ui, sans-serif; line-height: 1.4; }
+/* Problem strip */
+.strip { background:rgba(0,0,0,0.02); border-top:1px solid rgba(0,0,0,0.06); border-bottom:1px solid rgba(0,0,0,0.06); padding:64px 40px; }
+.strip .section-label { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--amber); letter-spacing:2px; text-transform:uppercase; text-align:center; margin-bottom:10px; }
+.strip .section-h2 { font-size:28px; font-weight:700; text-align:center; margin-bottom:40px; max-width:560px; margin-left:auto; margin-right:auto; line-height:1.3; }
+.strip-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; max-width:900px; margin:0 auto; }
+.strip-card { background:var(--warm-white); border:1px solid rgba(0,0,0,0.06); border-radius:12px; padding:20px; }
+.strip-card-title { font-size:13px; font-weight:700; margin-bottom:6px; letter-spacing:0.03em; }
+.strip-card-desc { font-size:13px; color:var(--ink-muted); line-height:1.6; }
 
-    /* ── Provider section ───────────────────────────────────────── */
-    .provider-section { background: var(--cream2); border-top: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border); padding: 48px 40px; }
-    .provider-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; max-width: 900px; margin: 0 auto; }
-    .provider-card { background: var(--cream); border: 1.5px solid var(--border); border-radius: 6px; padding: 16px 14px; text-align: center; }
-    .provider-name { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 4px; letter-spacing: .04em; }
-    .provider-model { font-size: 11px; color: var(--muted); font-family: 'Courier New', monospace; margin-bottom: 6px; }
-    .provider-note { font-size: 11px; color: var(--muted); font-family: system-ui, sans-serif; line-height: 1.4; }
-    .provider-pill { display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 2px; margin-top: 6px; }
-    .pill-free { background: #D4EDDA; color: #1A5C2A; border: 1px solid #8BC49A; }
-    .pill-local { background: #E8F0FE; color: #1A3A8A; border: 1px solid #8AAAD4; }
-    .pill-cloud { background: var(--cream2); color: var(--muted); border: 1px solid var(--border); }
-    .cave-scene { display: block; width: 100%; overflow: hidden; }
-    .cave-scene svg { display: block; width: 100%; }
+/* Connected intelligence flow */
+.connect-section { padding:64px 40px; max-width:960px; margin:0 auto; }
+.connect-flow { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0; border:1px solid rgba(0,0,0,0.06); border-radius:12px; overflow:hidden; margin-bottom:40px; }
+.connect-step { padding:22px 20px; border-right:1px solid rgba(0,0,0,0.06); }
+.connect-step:last-child { border-right:none; }
+.connect-num { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--amber); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+.connect-title { font-size:15px; font-weight:700; margin-bottom:6px; }
+.connect-desc { font-size:13px; color:var(--ink-muted); line-height:1.6; margin-bottom:8px; }
+.connect-tag { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--ink-faint); letter-spacing:0.5px; }
 
-    /* ── Roadmap section ───────────────────────────────────────── */
-    .roadmap-section { padding: 60px 40px; background: var(--cream2); border-top: 1.5px solid var(--border); }
-    .roadmap-timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; max-width: 900px; margin: 0 auto; }
-    .roadmap-card { background: var(--cream); border: 1.5px solid var(--border); border-radius: 6px; padding: 18px 14px; }
-    .roadmap-card.live { border-color: var(--brown); }
-    .roadmap-version { font-size: 10px; font-weight: 700; letter-spacing: .13em; color: var(--brown); margin-bottom: 4px; }
-    .roadmap-name { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
-    .roadmap-features { font-size: 11px; color: var(--muted); font-family: system-ui, sans-serif; line-height: 1.65; }
-    .roadmap-features li { margin-bottom: 2px; list-style: none; padding-left: 12px; position: relative; }
-    .roadmap-features li::before { content: '·'; position: absolute; left: 0; color: var(--hint); }
-    .badge-planned { background: var(--cream2); color: var(--hint); border: 1px solid var(--border); display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .1em; border-radius: 2px; padding: 2px 7px; margin-top: 8px; }
+/* Rubric */
+.rubric-section { padding:64px 40px; background:rgba(0,0,0,0.02); border-top:1px solid rgba(0,0,0,0.06); border-bottom:1px solid rgba(0,0,0,0.06); }
+.rubric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; max-width:900px; margin:0 auto 28px; }
+.rubric-card { background:var(--warm-white); border:1px solid rgba(0,0,0,0.06); border-radius:10px; padding:16px 14px; }
+.rubric-card.weighted { border-color:var(--amber); }
+.rubric-dim { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; color:var(--amber); margin-bottom:4px; letter-spacing:1px; }
+.rubric-name { font-size:13px; font-weight:700; margin-bottom:4px; }
+.rubric-cite { font-size:12px; color:var(--ink-muted); line-height:1.4; }
 
-    /* ── Connected intelligence ────────────────────── */
-    .connect-section {
-      padding: 52px 40px;
-      background: var(--cream);
-      border-top: 1.5px solid var(--border);
-      border-bottom: 1.5px solid var(--border);
-    }
-    .connect-flow {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 0;
-      max-width: 920px;
-      margin: 0 auto 36px;
-      border: 1.5px solid var(--border);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-    .connect-step {
-      padding: 22px 18px;
-      border-right: 1.5px solid var(--border);
-    }
-    .connect-step:last-child { border-right: none; }
-    .connect-num {
-      font-size: 10px; font-weight: 700;
-      letter-spacing: .15em; color: var(--brown);
-      margin-bottom: 6px;
-    }
-    .connect-title {
-      font-size: 13px; font-weight: 700;
-      color: var(--ink); margin-bottom: 8px;
-    }
-    .connect-desc {
-      font-size: 12px; color: var(--muted);
-      line-height: 1.65;
-      font-family: system-ui, sans-serif;
-      margin-bottom: 10px;
-    }
-    .connect-tag {
-      font-size: 10px; font-weight: 700;
-      letter-spacing: .08em; color: var(--hint);
-      font-family: inherit;
-    }
-    .principle-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-      max-width: 920px;
-      margin: 0 auto;
-    }
-    .principle-card {
-      background: var(--cream2);
-      border: 1.5px solid var(--border);
-      border-radius: 6px;
-      padding: 18px 16px;
-    }
-    .principle-title {
-      font-size: 11px; font-weight: 700;
-      letter-spacing: .08em; color: var(--ink);
-      margin-bottom: 8px;
-    }
-    .principle-desc {
-      font-size: 12px; color: var(--muted);
-      line-height: 1.65;
-      font-family: system-ui, sans-serif;
-    }
+/* Providers */
+.provider-section { padding:64px 40px; max-width:960px; margin:0 auto; }
+.provider-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; max-width:900px; margin:0 auto; }
+.provider-card { background:var(--warm-white); border:1px solid rgba(0,0,0,0.06); border-radius:12px; padding:18px 16px; text-align:center; }
+.provider-name { font-size:14px; font-weight:700; margin-bottom:4px; }
+.provider-model { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-muted); margin-bottom:8px; }
+.provider-note { font-size:12px; color:var(--ink-muted); line-height:1.4; margin-bottom:8px; }
+.provider-pill { display:inline-block; font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 8px; border-radius:4px; margin:2px; }
+.pill-cloud { background:rgba(0,0,0,0.04); color:var(--ink-faint); }
+.pill-local { background:rgba(68,136,204,0.08); color:var(--blue); }
+.pill-free { background:rgba(58,170,92,0.08); color:var(--green); }
 
-    /* ── Footer bar ─────────────────────────────────────────────── */
-    footer {
-      background: var(--ink); padding: 18px 40px;
-      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
-    }
-    .footer-name { font-size: 14px; font-weight: 700; color: var(--cream); letter-spacing: .1em; }
-    .footer-links { display: flex; gap: 18px; flex-wrap: wrap; }
-    .footer-links a { font-size: 11px; color: var(--hint); text-decoration: none; }
-    .footer-links a:hover { color: var(--cream); }
-    .footer-gh { font-size: 11px; color: #8B6A3A; letter-spacing: .04em; }
+/* Tagline */
+.tagline-section { padding:64px 40px; text-align:center; }
+.tagline-h { font-size:30px; font-weight:700; line-height:1.3; }
+.tagline-h span { color:var(--amber); }
+.tagline-sub { font-size:15px; color:var(--ink-muted); margin-top:10px; }
+.tagline-cta { margin-top:28px; }
 
-    /* ── Responsive ─────────────────────────────────────────────── */
-    @media (max-width: 700px) {
-      nav { padding: 12px 16px; }
-      .nav-links { display: none; }
-      .hero { padding: 40px 16px 48px; }
-      .hero-title { font-size: 64px; }
-      .strip, .crew, .tagline-section { padding: 36px 16px; }
-      footer { padding: 16px; flex-direction: column; align-items: flex-start; gap: 8px; }
-    }
-  </style>
+/* Install strip */
+.install-section { padding:64px 40px; background:var(--ink); }
+.install-section .section-label { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--amber); letter-spacing:2px; text-transform:uppercase; text-align:center; margin-bottom:8px; }
+.install-section .section-h2 { font-size:28px; font-weight:700; text-align:center; color:#faf8f4; margin-bottom:36px; }
+.install-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; max-width:1100px; margin:0 auto 32px; }
+.install-step-label { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; letter-spacing:1.5px; color:var(--amber); text-transform:uppercase; margin-bottom:8px; }
+.install-code { background:#0e0a06; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:16px; font-family:'JetBrains Mono',monospace; font-size:13px; color:#c8a860; white-space:pre; overflow-x:auto; min-width:0; }
+.install-muted { color:rgba(200,168,96,0.45); font-size:11px; }
+@media(max-width:700px){ .install-steps { grid-template-columns:1fr; } }
+
+/* Roadmap */
+.roadmap-section { padding:64px 40px; max-width:960px; margin:0 auto; }
+.roadmap-timeline { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; }
+.roadmap-card { background:var(--warm-white); border:1px solid rgba(0,0,0,0.06); border-radius:12px; padding:20px 16px; }
+.roadmap-card.live { border-color:var(--amber); }
+.roadmap-version { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; color:var(--amber); margin-bottom:4px; letter-spacing:1px; }
+.roadmap-name { font-size:14px; font-weight:700; margin-bottom:10px; }
+.roadmap-features { font-size:12px; color:var(--ink-muted); line-height:1.7; list-style:none; }
+.roadmap-features li { padding-left:12px; position:relative; margin-bottom:2px; }
+.roadmap-features li::before { content:'·'; position:absolute; left:0; color:var(--ink-faint); }
+.badge-live { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--green); padding:2px 8px; background:rgba(58,170,92,0.08); border-radius:4px; display:inline-block; margin-top:8px; }
+.badge-planned { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--ink-faint); padding:2px 8px; background:rgba(0,0,0,0.04); border-radius:4px; display:inline-block; margin-top:8px; }
+
+/* Dispatch console */
+.dispatch-section { background:var(--ink); border-top:1px solid rgba(255,255,255,0.04); overflow:hidden; }
+@keyframes marquee-a { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes marquee-b { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes marquee-c { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.dc-header { display:flex; align-items:center; justify-content:space-between; padding:10px 24px; border-bottom:1px solid rgba(255,255,255,0.06); }
+.dc-title { font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:500; letter-spacing:2px; color:rgba(200,160,96,0.5); text-transform:uppercase; }
+.dc-live { display:flex; align-items:center; gap:6px; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--green); }
+.dc-dot { width:5px; height:5px; border-radius:50%; background:var(--green); animation:live-blink 1.4s ease-in-out infinite; }
+.dc-stats { display:flex; gap:28px; padding:7px 24px; border-bottom:1px solid rgba(255,255,255,0.04); font-family:'JetBrains Mono',monospace; font-size:9px; color:rgba(200,160,96,0.3); }
+.dc-stat-val { color:#c8a060; font-weight:500; }
+.dc-row { position:relative; border-bottom:1px solid rgba(255,255,255,0.04); height:30px; overflow:hidden; }
+.dc-row-lbl { position:absolute; left:0; top:0; bottom:0; width:76px; background:var(--ink); z-index:3; display:flex; align-items:center; padding-left:16px; font-family:'JetBrains Mono',monospace; font-size:8px; font-weight:500; letter-spacing:1.5px; border-right:1px solid rgba(255,255,255,0.05); }
+.dc-fade-l { position:absolute; left:76px; top:0; bottom:0; width:32px; background:linear-gradient(to right,var(--ink),transparent); z-index:2; pointer-events:none; }
+.dc-fade-r { position:absolute; right:0; top:0; bottom:0; width:60px; background:linear-gradient(to left,var(--ink),transparent); z-index:2; pointer-events:none; }
+.dc-track { display:flex; padding-left:108px; height:100%; align-items:center; }
+.dc-inner { display:flex; align-items:center; white-space:nowrap; will-change:transform; }
+.dc-item { display:inline-flex; align-items:center; gap:10px; padding:0 28px; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.04em; }
+
+/* Utility */
+.section-label-mono { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--amber); letter-spacing:2px; text-transform:uppercase; text-align:center; margin-bottom:10px; }
+.section-h2-center { font-size:32px; font-weight:700; text-align:center; margin-bottom:12px; }
+.section-lead-center { font-size:15px; color:var(--ink-muted); text-align:center; max-width:560px; margin:0 auto 40px; line-height:1.65; }
+.text-center { text-align:center; }
+.max-900 { max-width:900px; margin-left:auto; margin-right:auto; }
+
+/* Responsive */
+@media(max-width:700px){
+  nav { padding:12px 16px; }
+  .nav-links { display:none; }
+  .hero { padding:80px 16px 0; }
+  .content-section,.principles,.crew-section,.rubric-section,.provider-section,.roadmap-section,.connect-section { padding:40px 16px; }
+  .strip,.tagline-section { padding:40px 16px; }
+  footer { padding:24px 16px; }
+}
+</style>
 </head>
 <body>
 
-<!-- ── Nav ──────────────────────────────────────────────────────── -->
+<!-- ── Nav ── -->
 <nav>
-  <a class="nav-brand" href="/">
-    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
-      <rect width="30" height="30" rx="5" fill="#1A1510"/>
-      <!-- pixel raccoon face mark -->
-      <rect x="6" y="9" width="18" height="15" rx="3" fill="#9A8878"/>
-      <rect x="5" y="14" width="20" height="6" fill="#241810"/>
-      <rect x="7" y="15" width="6" height="4" rx="1" fill="#F0EBE0"/>
-      <rect x="9" y="16" width="3" height="3" rx="1" fill="#1A1210"/>
-      <rect x="17" y="15" width="6" height="4" rx="1" fill="#F0EBE0"/>
-      <rect x="19" y="16" width="3" height="3" rx="1" fill="#1A1210"/>
-      <rect x="5" y="6" width="7" height="7" rx="1" fill="#6A5848"/>
-      <rect x="7" y="8" width="4" height="5" rx="1" fill="#C89090"/>
-      <rect x="18" y="6" width="7" height="7" rx="1" fill="#6A5848"/>
-      <rect x="19" y="8" width="4" height="5" rx="1" fill="#C89090"/>
-      <rect x="11" y="19" width="8" height="5" rx="1" fill="#C4BCB2"/>
-      <rect x="13" y="20" width="4" height="3" rx="1" fill="#2C1A10"/>
-    </svg>
-    <div>
-      <div class="nav-wordmark">BANDIT</div>
-      <div class="nav-sub">vendor risk intelligence</div>
-    </div>
-  </a>
-  <ul class="nav-links">
-    <li><a href="#crew">The Crew</a></li>
-    <li><a href="#rubric">The Rubric</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="https://github.com/conorrusso/bandit" target="_blank" rel="noopener">GitHub</a></li>
-    <li><a href="https://github.com/conorrusso/bandit/blob/main/README.md" target="_blank" rel="noopener">Docs</a></li>
-  </ul>
-  <a class="nav-cta" href="https://github.com/conorrusso/bandit" target="_blank" rel="noopener">GET STARTED ↗</a>
+  <a href="/" class="nav-logo">BAN<span>DIT</span></a>
+  <div class="nav-links">
+    <a href="#crew">The Crew</a>
+    <a href="#rubric">The Rubric</a>
+    <a href="#roadmap">Roadmap</a>
+    <a href="https://github.com/conorrusso/bandit/blob/main/README.md"
+       target="_blank" rel="noopener">Docs</a>
+    <a href="https://github.com/conorrusso/bandit"
+       target="_blank" rel="noopener" class="nav-cta">
+      Get Started ↗
+    </a>
+  </div>
 </nav>
 
-<!-- ── Hero ─────────────────────────────────────────────────────── -->
-<section class="hero" aria-label="Hero">
-  <div class="hero-text">
-    <div class="eyebrow">FREE · OPEN SOURCE · PYTHON · CLI</div>
-    <p class="punchline">YOUR VENDORS ARE HOPING YOU DON'T READ THE FINE PRINT.</p>
-    <h1 class="hero-title">BANDIT</h1>
-    <p class="hero-tag">Vendor Risk Intelligence Suite</p>
-    <p class="hero-desc">Point it at a vendor. Bandit finds the privacy policy, reads the DPA, checks the SOC 2, and scores everything across 8 GDPR/CCPA dimensions — calibrated to your industry, your tech stack, and what that vendor actually does for you. GRC gets a risk report. Legal gets a redline brief. IT gets an action list. Every result builds a permanent vendor record.</p>
-    <div class="hero-btns">
-      <a class="btn-primary" href="https://github.com/conorrusso/bandit" target="_blank" rel="noopener">GET STARTED</a>
-      <a class="btn-ghost" href="https://github.com/conorrusso/bandit/blob/main/core/scoring/RUBRIC.md" target="_blank" rel="noopener">READ THE RUBRIC</a>
-    </div>
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-label">
+    Free · Open Source · Python · CLI
+  </div>
+  <h1>Your vendors are hoping you don't read the fine print.</h1>
+  <p>Point it at a vendor. Bandit finds the privacy policy,
+  reads the DPA, checks the SOC 2, and scores everything
+  across 8 GDPR/CCPA dimensions — calibrated to your
+  industry, your tech stack, and what that vendor
+  actually does for you.</p>
+  <div class="hero-buttons">
+    <a href="https://github.com/conorrusso/bandit"
+       target="_blank" rel="noopener" class="btn-primary">
+      Get Started on GitHub
+    </a>
+    <a href="https://github.com/conorrusso/bandit/blob/main/core/scoring/RUBRIC.md"
+       target="_blank" rel="noopener" class="btn-secondary">
+      Read the Rubric
+    </a>
   </div>
 </section>
 
-<!-- ── Rooftop scene — full bleed ────────────────────────────────── -->
-<div class="scene-section" aria-hidden="true">
-  <svg viewBox="0 0 1400 520" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax slice">
-    <!-- Night sky -->
-    <rect x="0" y="0" width="1400" height="520" fill="#201808"/>
-    <rect x="0" y="0" width="1400" height="160" fill="#18100A"/>
-    <!-- Stars scattered wide -->
-    <rect x="40"  y="20" width="5" height="5" fill="#F8ECC0" opacity=".8"/>
-    <rect x="130" y="12" width="4" height="4" fill="#F8ECC0" opacity=".7"/>
-    <rect x="230" y="28" width="5" height="5" fill="#F8ECC0" opacity=".85"/>
-    <rect x="360" y="10" width="4" height="4" fill="#F8ECC0" opacity=".6"/>
-    <rect x="480" y="22" width="6" height="6" fill="#F8ECC0" opacity=".9"/>
-    <rect x="600" y="8"  width="4" height="4" fill="#F8ECC0" opacity=".7"/>
-    <rect x="700" y="30" width="4" height="4" fill="#F8ECC0" opacity=".5"/>
-    <rect x="820" y="15" width="5" height="5" fill="#F8ECC0" opacity=".8"/>
-    <rect x="940" y="6"  width="4" height="4" fill="#F8ECC0" opacity=".7"/>
-    <rect x="1060" y="24" width="4" height="4" fill="#F8ECC0" opacity=".6"/>
-    <rect x="1180" y="14" width="5" height="5" fill="#F8ECC0" opacity=".85"/>
-    <rect x="1300" y="8"  width="4" height="4" fill="#F8ECC0" opacity=".7"/>
-    <rect x="1360" y="28" width="4" height="4" fill="#F8ECC0" opacity=".6"/>
-    <rect x="80"  y="48" width="4" height="4" fill="#F8ECC0" opacity=".5"/>
-    <rect x="280" y="52" width="4" height="4" fill="#F8ECC0" opacity=".55"/>
-    <rect x="540" y="42" width="4" height="4" fill="#F8ECC0" opacity=".4"/>
-    <rect x="760" y="58" width="4" height="4" fill="#F8ECC0" opacity=".5"/>
-    <rect x="1000" y="44" width="4" height="4" fill="#F8ECC0" opacity=".55"/>
-    <rect x="1240" y="50" width="4" height="4" fill="#F8ECC0" opacity=".4"/>
-    <!-- Moon -->
-    <rect x="1060" y="36" width="60" height="10" fill="#FAE8B8"/>
-    <rect x="1048" y="46" width="84" height="10" fill="#FAE8B8"/>
-    <rect x="1040" y="56" width="100" height="28" fill="#FAE8B8"/>
-    <rect x="1048" y="84" width="84" height="10" fill="#FAE8B8"/>
-    <rect x="1060" y="94" width="60" height="10" fill="#FAE8B8"/>
-    <rect x="1064" y="58" width="16" height="10" rx="2" fill="#E8C488" opacity=".5"/>
-    <rect x="1090" y="74" width="14" height="9"  rx="2" fill="#E8C488" opacity=".4"/>
-    <!-- Buildings left -->
-    <rect x="0"   y="160" width="70"  height="360" fill="#18100A"/>
-    <rect x="12"  y="178" width="12" height="12"  fill="#D4A030" opacity=".4"/>
-    <rect x="36"  y="178" width="12" height="12"  fill="#D4A030" opacity=".7"/>
-    <rect x="12"  y="204" width="12" height="12"  fill="#D4A030" opacity=".2"/>
-    <rect x="36"  y="204" width="12" height="12"  fill="#D4A030" opacity=".5"/>
-    <rect x="78"  y="190" width="58"  height="330" fill="#1C140A"/>
-    <rect x="90"  y="208" width="10" height="10"  fill="#C89828" opacity=".55"/>
-    <rect x="114" y="208" width="10" height="10"  fill="#C89828" opacity=".8"/>
-    <rect x="144" y="134" width="90"  height="386" fill="#18100A"/>
-    <rect x="156" y="152" width="12" height="12"  fill="#D4A828" opacity=".65"/>
-    <rect x="182" y="152" width="12" height="12"  fill="#D4A828" opacity=".9"/>
-    <rect x="208" y="152" width="12" height="12"  fill="#D4A828" opacity=".35"/>
-    <rect x="156" y="178" width="12" height="12"  fill="#D4A828" opacity=".4"/>
-    <rect x="182" y="178" width="12" height="12"  fill="#D4A828" opacity=".65"/>
-    <!-- Neon sign -->
-    <rect x="148" y="202" width="80" height="16" rx="1" fill="#8A1818"/>
-    <rect x="152" y="206" width="72" height="10" rx="1" fill="#E02828" opacity=".85"/>
-    <!-- Water tower -->
-    <rect x="248" y="144" width="68"  height="44" rx="3" fill="#2A1A0A"/>
-    <rect x="242" y="186" width="80"  height="7"       fill="#221408"/>
-    <rect x="258" y="193" width="14"  height="64"       fill="#221408"/>
-    <rect x="298" y="193" width="14"  height="64"       fill="#221408"/>
-    <rect x="248" y="255" width="68"  height="6"        fill="#1A1006"/>
-    <!-- Buildings right -->
-    <rect x="1180" y="170" width="80"  height="350" fill="#18100A"/>
-    <rect x="1196" y="186" width="10" height="10"  fill="#C89828" opacity=".55"/>
-    <rect x="1220" y="186" width="10" height="10"  fill="#C89828" opacity=".85"/>
-    <rect x="1244" y="186" width="10" height="10"  fill="#C89828" opacity=".35"/>
-    <rect x="1270" y="160" width="70"  height="360" fill="#1A1208"/>
-    <rect x="1282" y="176" width="10" height="10"  fill="#D4A828" opacity=".6"/>
-    <rect x="1306" y="176" width="10" height="10"  fill="#D4A828" opacity=".4"/>
-    <rect x="1330" y="164" width="70"  height="356" fill="#18100A"/>
-    <rect x="1342" y="180" width="10" height="10"  fill="#C89828" opacity=".7"/>
-    <rect x="1366" y="180" width="10" height="10"  fill="#C89828" opacity=".4"/>
-    <!-- Rooftop full width -->
-    <rect x="0"   y="370" width="1400" height="150" fill="#362414"/>
-    <rect x="0"   y="358" width="1400" height="14"  fill="#4A3420"/>
-    <rect x="0"   y="348" width="1400" height="12"  fill="#5A4028"/>
-    <rect x="0"   y="340" width="1400" height="10"  fill="#6A5030"/>
-    <!-- AC units -->
-    <rect x="30"  y="314" width="48" height="30" rx="1" fill="#4A3420"/>
-    <rect x="36"  y="310" width="36" height="8"  rx="1" fill="#3A2818"/>
-    <rect x="30"  y="326" width="48" height="4"        fill="#3A2818"/>
-    <rect x="900" y="310" width="48" height="30" rx="1" fill="#4A3420"/>
-    <rect x="906" y="306" width="36" height="8"  rx="1" fill="#3A2818"/>
-    <!-- Antenna -->
-    <rect x="1100" y="262" width="5" height="90"  fill="#3A2818"/>
-    <rect x="1082" y="262" width="40" height="4"  fill="#3A2818"/>
-    <rect x="1082" y="256" width="5" height="14"  fill="#3A2818"/>
-    <!-- Vent -->
-    <rect x="1260" y="296" width="14" height="68" fill="#3A2818"/>
-    <rect x="1254" y="290" width="26" height="10" rx="1" fill="#4A3020"/>
-    <!-- Rooftop windows / building face -->
-    <rect x="80"  y="370" width="22" height="26" rx="1" fill="#D4A030" opacity=".3"/>
-    <rect x="130" y="370" width="22" height="26" rx="1" fill="#D4A030" opacity=".65"/>
-    <rect x="180" y="370" width="22" height="26" rx="1" fill="#D4A030" opacity=".45"/>
-    <rect x="1100" y="370" width="22" height="26" rx="1" fill="#D4A030" opacity=".5"/>
-    <rect x="1150" y="370" width="22" height="26" rx="1" fill="#D4A030" opacity=".25"/>
-    <!-- Floating docs - spread wide -->
-    <g transform="translate(120,196) rotate(-13)">
-      <rect width="46" height="60" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-      <rect x="0" y="0" width="46" height="12" rx="1" fill="#1871D0" opacity=".85"/>
-      <rect x="6" y="18" width="34" height="3" fill="#C0B8A0"/>
-      <rect x="6" y="25" width="28" height="3" fill="#C0B8A0"/>
-      <rect x="6" y="32" width="32" height="3" fill="#C0B8A0"/>
-      <rect x="6" y="39" width="22" height="3" fill="#C0B8A0"/>
-    </g>
-    <g transform="translate(280,160) rotate(8)">
-      <rect width="54" height="70" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-      <rect x="0" y="0" width="54" height="13" rx="1" fill="#4A154B" opacity=".85"/>
-      <rect x="7" y="20" width="40" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="27" width="32" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="34" width="38" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="41" width="28" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="48" width="34" height="3" fill="#C0B8A0"/>
-    </g>
-    <g transform="translate(470,210) rotate(-18)">
-      <rect width="42" height="54" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-      <rect x="0" y="0" width="42" height="11" rx="1" fill="#2DB750" opacity=".85"/>
-      <rect x="6" y="17" width="30" height="3" fill="#C0B8A0"/>
-      <rect x="6" y="24" width="24" height="3" fill="#C0B8A0"/>
-      <rect x="6" y="31" width="28" height="3" fill="#C0B8A0"/>
-    </g>
-    <g transform="translate(660,144) rotate(6)">
-      <rect width="50" height="64" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-      <rect x="0" y="0" width="50" height="12" rx="1" fill="#2281FF" opacity=".85"/>
-      <rect x="7" y="18" width="36" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="25" width="30" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="32" width="34" height="3" fill="#C0B8A0"/>
-      <rect x="7" y="39" width="24" height="3" fill="#C0B8A0"/>
-    </g>
-    <!-- Raccoon — centered in wide viewbox -->
-    <!-- Tail -->
-    <rect x="906" y="294" width="40" height="14" rx="3" fill="#5C4838"/>
-    <rect x="938" y="274" width="14" height="34" rx="3" fill="#9A8878"/>
-    <rect x="922" y="260" width="36" height="14" rx="3" fill="#5C4838"/>
-    <rect x="922" y="244" width="14" height="20" rx="3" fill="#9A8878"/>
-    <rect x="914" y="232" width="24" height="16" rx="3" fill="#5C4838"/>
-    <rect x="915" y="220" width="22" height="16" rx="3" fill="#E0D8CC"/>
+<!-- ── Hero art ── -->
+<div class="hero-art">
+
+  <!-- Sneaking Bandit (left, 280×280) -->
+  <svg class="px" viewBox="0 0 120 120" width="280" height="280" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="55" cy="116" rx="28" ry="5" fill="#1a1814" opacity="0.07"/>
+    <rect x="14" y="56" width="10" height="10" fill="#787070"/>
+    <rect x="10" y="46" width="10" height="12" fill="#484040"/>
+    <rect x="14" y="36" width="10" height="12" fill="#888080"/>
+    <rect x="20" y="28" width="8" height="10" fill="#484040"/>
+    <rect x="26" y="24" width="6" height="6" fill="#888080"/>
+    <rect x="34" y="96" width="12" height="12" fill="#686060"/>
+    <rect x="30" y="106" width="16" height="8" fill="#484040"/>
+    <rect x="62" y="92" width="12" height="14" fill="#686060"/>
+    <rect x="60" y="104" width="16" height="8" fill="#484040"/>
+    <rect x="30" y="62" width="46" height="32" fill="#888080"/>
+    <rect x="26" y="68" width="52" height="22" fill="#888080"/>
+    <rect x="34" y="60" width="38" height="4" fill="#989090"/>
+    <rect x="38" y="70" width="30" height="18" fill="#d0c8b8"/>
+    <rect x="42" y="74" width="22" height="10" fill="#ddd6c6"/>
+    <rect x="44" y="66" width="12" height="8" fill="#e8922c"/>
+    <rect x="46" y="68" width="8" height="4" fill="#ffc840"/>
+    <rect x="20" y="64" width="12" height="10" fill="#787070"/>
+    <rect x="14" y="62" width="10" height="8" fill="#686060"/>
+    <rect x="6" y="52" width="20" height="24" fill="#e8e0c8"/>
+    <rect x="8" y="54" width="16" height="4" fill="#d04444" opacity="0.5"/>
+    <rect x="8" y="60" width="14" height="2" fill="#a09888" opacity="0.3"/>
+    <rect x="8" y="64" width="16" height="2" fill="#a09888" opacity="0.3"/>
+    <rect x="8" y="68" width="10" height="2" fill="#a09888" opacity="0.3"/>
+    <rect x="4" y="70" width="16" height="6" fill="#d8d0b8"/>
+    <rect x="6" y="71" width="12" height="3" fill="#3aaa5c" opacity="0.4"/>
+    <rect x="74" y="62" width="12" height="10" fill="#787070"/>
+    <rect x="82" y="58" width="10" height="10" fill="#686060"/>
+    <rect x="88" y="48" width="4" height="14" fill="#8a7a50"/>
+    <circle cx="90" cy="42" r="10" fill="none" stroke="#c8a850" stroke-width="4"/>
+    <circle cx="90" cy="42" r="6" fill="#faf8f4" opacity="0.15"/>
+    <rect x="40" y="22" width="44" height="36" fill="#888080"/>
+    <rect x="36" y="28" width="8" height="26" fill="#888080"/>
+    <rect x="80" y="28" width="6" height="24" fill="#888080"/>
+    <rect x="44" y="20" width="36" height="4" fill="#989090"/>
+    <rect x="40" y="12" width="12" height="12" fill="#787070"/>
+    <rect x="42" y="14" width="8" height="8" fill="#c09888"/>
+    <rect x="72" y="12" width="12" height="12" fill="#787070"/>
+    <rect x="74" y="14" width="8" height="8" fill="#c09888"/>
+    <rect x="38" y="32" width="46" height="12" fill="#2a2424"/>
+    <rect x="36" y="34" width="4" height="8" fill="#2a2424"/>
+    <rect x="82" y="34" width="4" height="8" fill="#2a2424"/>
+    <rect x="42" y="34" width="12" height="8" fill="#f0f0f0"/>
+    <rect x="64" y="34" width="12" height="8" fill="#f0f0f0"/>
+    <rect x="48" y="36" width="6" height="6" fill="#181818"/>
+    <rect x="70" y="36" width="6" height="6" fill="#181818"/>
+    <rect x="50" y="36" width="3" height="3" fill="#fff"/>
+    <rect x="72" y="36" width="3" height="3" fill="#fff"/>
+    <rect x="42" y="31" width="12" height="3" fill="#484040"/>
+    <rect x="64" y="32" width="12" height="2" fill="#484040"/>
+    <rect x="52" y="44" width="26" height="10" fill="#c8c0b0"/>
+    <rect x="56" y="42" width="18" height="4" fill="#c8c0b0"/>
+    <rect x="58" y="44" width="12" height="6" fill="#2a2424"/>
+    <rect x="60" y="46" width="8" height="2" fill="#3a3434"/>
+    <rect x="64" y="50" width="8" height="2" fill="#b0a898"/>
+    <rect x="70" y="49" width="4" height="2" fill="#a09888"/>
+    <rect x="34" y="40" width="6" height="8" fill="#b8b0a0"/>
+    <rect x="82" y="40" width="6" height="8" fill="#b8b0a0"/>
+    <rect x="34" y="16" width="54" height="8" fill="#2a2030"/>
+    <rect x="44" y="0" width="36" height="16" fill="#342840"/>
+    <rect x="46" y="2" width="32" height="4" fill="#3e3450"/>
+    <rect x="44" y="12" width="36" height="6" fill="#e8922c"/>
+    <rect x="46" y="14" width="32" height="2" fill="#d07818"/>
+    <rect x="96" y="54" width="14" height="3" fill="#1a1814" opacity="0.05"/>
+    <rect x="100" y="66" width="18" height="3" fill="#1a1814" opacity="0.04"/>
+    <rect x="98" y="78" width="12" height="3" fill="#1a1814" opacity="0.05"/>
+  </svg>
+
+  <!-- Hideout cross-section (right, 440×440) with coffee steam animation -->
+  <svg class="px" viewBox="0 0 200 200" width="440" height="440" xmlns="http://www.w3.org/2000/svg">
+    <!-- Cave outer -->
+    <path d="M 50,70 C 35,72 22,82 18,96 C 14,112 16,130 24,144 C 32,158 46,168 66,174 C 86,180 110,182 132,178 C 154,174 170,164 180,150 C 188,136 190,118 186,104 C 182,90 172,78 158,72 C 144,66 126,64 108,62 C 90,60 68,64 50,70 Z" fill="#5a4e38"/>
+    <!-- Cave inner -->
+    <path d="M 56,78 C 44,82 34,92 30,104 C 26,116 28,132 36,144 C 44,156 58,164 76,168 C 94,172 116,174 134,170 C 152,166 164,156 172,144 C 178,132 180,118 178,106 C 176,94 168,84 156,78 C 144,72 128,68 112,66 C 96,64 76,66 62,72 Z" fill="#4a4030"/>
+    <!-- Floor -->
+    <path d="M 36,144 C 44,156 58,164 76,168 C 94,172 116,174 134,170 C 152,166 164,156 172,144 L 30,144 Z" fill="#3e3428"/>
+
+    <!-- Tunnel up-right -->
+    <path d="M 148,64 C 152,52 158,40 166,32 C 172,26 178,22 186,22 C 192,22 196,26 198,32 C 200,38 200,46 196,54 C 192,60 186,64 178,66 C 170,66 160,66 148,64 Z" fill="#5a4e38"/>
+    <path d="M 152,62 C 156,52 160,42 168,36 C 172,32 178,28 184,28 C 188,28 192,32 194,36 C 196,42 196,48 192,54 C 188,58 182,60 176,62 Z" fill="#4a4030"/>
+
+    <!-- Upper nook -->
+    <path d="M 162,10 C 154,10 148,16 146,24 C 144,32 146,40 152,46 C 158,50 166,52 174,50 C 182,48 188,42 192,34 C 194,26 192,18 186,14 C 180,10 172,8 162,10 Z" fill="#5a4e38"/>
+    <path d="M 164,16 C 158,18 154,22 152,28 C 150,34 152,40 156,44 C 160,46 166,48 172,46 C 178,44 182,40 184,34 C 186,28 184,22 180,18 C 176,14 170,14 164,16 Z" fill="#4a4030"/>
+
+    <!-- Rocks -->
+    <rect x="70" y="68" width="6" height="4" fill="#6a5e48" rx="1"/>
+    <rect x="140" y="66" width="5" height="3" fill="#6a5e48" rx="1"/>
+    <rect x="28" y="96" width="4" height="3" fill="#544838" rx="1"/>
+    <rect x="180" y="88" width="5" height="3" fill="#544838" rx="1"/>
+    <!-- Dirt specks -->
+    <rect x="50" y="148" width="3" height="3" fill="#362e22" opacity="0.4"/>
+    <rect x="90" y="154" width="3" height="3" fill="#362e22" opacity="0.4"/>
+    <rect x="140" y="150" width="3" height="3" fill="#362e22" opacity="0.4"/>
+
+    <!-- MINI BOOKSHELF in upper nook -->
+    <rect x="158" y="22" width="22" height="20" fill="#6a5838"/>
+    <rect x="159" y="23" width="20" height="18" fill="#5a4828"/>
+    <rect x="158" y="30" width="22" height="2" fill="#7a6840"/>
+    <rect x="158" y="38" width="22" height="2" fill="#7a6840"/>
+    <rect x="161" y="24" width="4" height="6" fill="#c04040"/>
+    <rect x="166" y="25" width="3" height="5" fill="#4080b0"/>
+    <rect x="170" y="24" width="4" height="6" fill="#d0a030"/>
+    <rect x="175" y="25" width="3" height="5" fill="#30a060"/>
+    <rect x="161" y="32" width="5" height="6" fill="#e8922c" opacity="0.6"/>
+    <rect x="168" y="33" width="5" height="5" fill="#3aaa5c" opacity="0.6"/>
+    <rect x="175" y="32" width="3" height="6" fill="#7a5cb8" opacity="0.5"/>
+
+    <!-- EVIDENCE BOARD -->
+    <rect x="40" y="82" width="30" height="20" fill="#6a5838"/>
+    <rect x="42" y="84" width="26" height="16" fill="#7a6840"/>
+    <rect x="44" y="86" width="8" height="5" fill="#e8e0c8" opacity="0.7"/>
+    <rect x="45" y="87" width="6" height="2" fill="#d04444" opacity="0.5"/>
+    <rect x="54" y="85" width="7" height="6" fill="#d8d0b8" opacity="0.7"/>
+    <rect x="55" y="86" width="5" height="2" fill="#3aaa5c" opacity="0.5"/>
+    <rect x="63" y="87" width="4" height="4" fill="#e0d8c0" opacity="0.6"/>
+    <rect x="46" y="93" width="6" height="5" fill="#f0e8d0" opacity="0.6"/>
+    <rect x="54" y="92" width="6" height="5" fill="#e8e0c8" opacity="0.6"/>
+    <circle cx="47" cy="86" r="1.5" fill="#d04444"/>
+    <circle cx="57" cy="85" r="1.5" fill="#3aaa5c"/>
+    <circle cx="64" cy="87" r="1.5" fill="#e8922c"/>
+    <line x1="47" y1="86" x2="57" y2="85" stroke="#d8c8a0" stroke-width="0.5" opacity="0.5"/>
+    <line x1="57" y1="85" x2="64" y2="87" stroke="#d8c8a0" stroke-width="0.5" opacity="0.5"/>
+
+    <!-- DESK -->
+    <rect x="80" y="120" width="42" height="4" fill="#6a5838"/>
+    <rect x="82" y="124" width="4" height="12" fill="#5a4828"/>
+    <rect x="116" y="124" width="4" height="12" fill="#5a4828"/>
+    <!-- Monitor -->
+    <rect x="86" y="108" width="18" height="12" fill="#1a1a2a"/>
+    <rect x="87" y="109" width="16" height="10" fill="#0c1020"/>
+    <rect x="89" y="111" width="10" height="2" fill="#3aaa5c" opacity="0.6"/>
+    <rect x="89" y="114" width="6" height="2" fill="#e8922c" opacity="0.4"/>
+    <rect x="93" y="120" width="4" height="2" fill="#2a2a3a"/>
+    <!-- Coffee with steam animation -->
+    <rect x="108" y="114" width="6" height="6" fill="#c8b898"/>
+    <rect x="109" y="115" width="4" height="4" fill="#4a2a10"/>
+    <rect x="110" y="110" width="2" height="2" fill="#a09888" opacity="0.2">
+      <animate attributeName="y" values="110;106;110" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0;0.2" dur="3s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- BANDIT IN CHAIR -->
+    <!-- Chair -->
+    <rect x="104" y="128" width="30" height="14" fill="#5a3828"/>
+    <rect x="106" y="130" width="26" height="10" fill="#6a4838"/>
+    <rect x="102" y="120" width="34" height="10" fill="#5a3828"/>
+    <rect x="104" y="122" width="30" height="6" fill="#6a4838"/>
     <!-- Body -->
-    <rect x="786" y="282" width="126" height="90" rx="6" fill="#8A7E74"/>
-    <rect x="808" y="292" width="84" height="76" rx="5" fill="#9E9288"/>
-    <!-- Haunches -->
-    <rect x="770" y="314" width="26" height="56" rx="5" fill="#7A6E64"/>
-    <rect x="902" y="310" width="26" height="60" rx="5" fill="#7A6E64"/>
-    <!-- Left arm with mag glass -->
-    <rect x="694" y="304" width="78" height="18" rx="5" fill="#8A7E74"/>
-    <rect x="676" y="294" width="26" height="28" rx="5" fill="#9A8878"/>
-    <!-- Right arm resting -->
-    <rect x="906" y="330" width="16" height="40" rx="4" fill="#8A7E74"/>
-    <rect x="894" y="366" width="36" height="18" rx="4" fill="#9A8878"/>
-    <!-- Neck -->
-    <rect x="814" y="264" width="62" height="24" rx="4" fill="#9A8878"/>
-    <!-- Collar -->
-    <rect x="800" y="274" width="88" height="12" rx="3" fill="#8B5A2B"/>
-    <rect x="830" y="282" width="28" height="16" rx="3" fill="#C8901C"/>
+    <rect x="110" y="122" width="18" height="14" fill="#888080"/>
+    <rect x="112" y="120" width="14" height="4" fill="#989090"/>
+    <rect x="114" y="126" width="10" height="8" fill="#d0c8b8"/>
+    <rect x="116" y="128" width="6" height="4" fill="#ddd6c6"/>
+    <rect x="115" y="122" width="8" height="4" fill="#e8922c"/>
+    <rect x="116" y="123" width="6" height="2" fill="#ffc840"/>
+    <!-- Arms -->
+    <rect x="102" y="126" width="10" height="4" fill="#787070"/>
+    <rect x="126" y="126" width="10" height="4" fill="#787070"/>
     <!-- Head -->
-    <rect x="788" y="188" width="116" height="82" rx="10" fill="#9A8878"/>
+    <rect x="106" y="100" width="24" height="18" fill="#888080"/>
+    <rect x="104" y="104" width="4" height="12" fill="#888080"/>
+    <rect x="128" y="104" width="4" height="12" fill="#888080"/>
+    <rect x="108" y="98" width="20" height="4" fill="#989090"/>
     <!-- Ears -->
-    <rect x="790" y="170" width="28" height="26" rx="3" fill="#6A5848"/>
-    <rect x="796" y="176" width="18" height="18" rx="2" fill="#9A8878"/>
-    <rect x="798" y="178" width="14" height="14" rx="2" fill="#D4A498"/>
-    <rect x="872" y="166" width="28" height="26" rx="3" fill="#6A5848"/>
-    <rect x="876" y="172" width="18" height="18" rx="2" fill="#9A8878"/>
-    <rect x="878" y="174" width="14" height="14" rx="2" fill="#D4A498"/>
+    <rect x="106" y="94" width="6" height="6" fill="#787070"/>
+    <rect x="107" y="95" width="4" height="4" fill="#c09888"/>
+    <rect x="124" y="94" width="6" height="6" fill="#787070"/>
+    <rect x="125" y="95" width="4" height="4" fill="#c09888"/>
     <!-- Mask -->
-    <rect x="788" y="210" width="116" height="30" rx="4" fill="#221610"/>
+    <rect x="104" y="106" width="28" height="6" fill="#2a2424"/>
     <!-- Eyes -->
-    <rect x="798" y="214" width="26" height="20" rx="3" fill="#F0EBE0"/>
-    <rect x="804" y="218" width="14" height="14" rx="3" fill="#1A1210"/>
-    <rect x="805" y="219" width="6"  height="6"  fill="#F0EBE0"/>
-    <rect x="866" y="214" width="26" height="20" rx="3" fill="#F0EBE0"/>
-    <rect x="872" y="218" width="14" height="14" rx="3" fill="#1A1210"/>
-    <rect x="873" y="219" width="6"  height="6"  fill="#F0EBE0"/>
-    <!-- Chin -->
-    <rect x="800" y="240" width="90" height="32" rx="5" fill="#C4BCB2"/>
-    <!-- Nose -->
-    <rect x="836" y="244" width="18" height="12" rx="3" fill="#2A1810"/>
-    <!-- Mouth -->
-    <rect x="820" y="260" width="10" height="4"  fill="#2A1810"/>
-    <rect x="858" y="260" width="10" height="4"  fill="#2A1810"/>
-    <!-- Mag glass frame -->
-    <rect x="574" y="248" width="74" height="10" rx="2" fill="#9A6A28"/>
-    <rect x="574" y="332" width="74" height="10" rx="2" fill="#9A6A28"/>
-    <rect x="564" y="258" width="10" height="74" rx="2" fill="#9A6A28"/>
-    <rect x="638" y="258" width="10" height="74" rx="2" fill="#9A6A28"/>
-    <rect x="574" y="258" width="10" height="10" fill="#9A6A28"/>
-    <rect x="628" y="258" width="10" height="10" fill="#9A6A28"/>
-    <rect x="574" y="322" width="10" height="10" fill="#9A6A28"/>
-    <rect x="628" y="322" width="10" height="10" fill="#9A6A28"/>
-    <!-- Lens -->
-    <rect x="574" y="258" width="64" height="74" fill="#EDE8D4" opacity=".38"/>
-    <rect x="588" y="270" width="28" height="7"  rx="1" fill="#FFF" opacity=".38"/>
-    <rect x="582" y="278" width="10" height="10" rx="1" fill="#FFF" opacity=".22"/>
-    <!-- Handle -->
-    <rect x="648" y="318" width="60" height="14" rx="5" fill="#9A6A28"/>
-    <rect x="700" y="323" width="22" height="9"  rx="3" fill="#7A5018"/>
+    <rect x="108" y="107" width="6" height="4" fill="#f0f0f0"/>
+    <rect x="122" y="107" width="6" height="4" fill="#f0f0f0"/>
+    <rect x="110" y="108" width="4" height="3" fill="#181818"/>
+    <rect x="124" y="108" width="4" height="3" fill="#181818"/>
+    <rect x="111" y="108" width="2" height="2" fill="#fff"/>
+    <rect x="125" y="108" width="2" height="2" fill="#fff"/>
+    <!-- Snout -->
+    <rect x="112" y="112" width="12" height="5" fill="#c8c0b0"/>
+    <rect x="114" y="112" width="8" height="3" fill="#2a2424"/>
+    <rect x="115" y="115" width="6" height="2" fill="#b0a898"/>
+    <!-- Cheeks -->
+    <rect x="102" y="110" width="4" height="4" fill="#b8b0a0"/>
+    <rect x="130" y="110" width="4" height="4" fill="#b8b0a0"/>
+    <!-- Hat -->
+    <rect x="102" y="98" width="32" height="4" fill="#2a2030"/>
+    <rect x="108" y="88" width="20" height="10" fill="#342840"/>
+    <rect x="110" y="88" width="16" height="4" fill="#3e3450"/>
+    <rect x="108" y="94" width="20" height="4" fill="#e8922c"/>
+    <rect x="110" y="96" width="16" height="2" fill="#d07818"/>
+
+    <!-- FILING CABINET -->
+    <rect x="42" y="130" width="14" height="22" fill="#484050"/>
+    <rect x="43" y="131" width="12" height="20" fill="#403848"/>
+    <rect x="45" y="133" width="8" height="5" fill="#383040"/>
+    <rect x="45" y="140" width="8" height="5" fill="#383040"/>
+    <rect x="45" y="147" width="8" height="4" fill="#383040"/>
+    <rect x="47" y="135" width="4" height="2" fill="#605868"/>
+    <rect x="47" y="142" width="4" height="2" fill="#605868"/>
+    <rect x="47" y="148" width="4" height="2" fill="#605868"/>
+    <rect x="45" y="133" width="2" height="5" fill="#3aaa5c" opacity="0.5"/>
+    <rect x="45" y="140" width="2" height="5" fill="#e8922c" opacity="0.5"/>
+    <rect x="45" y="147" width="2" height="4" fill="#d04444" opacity="0.5"/>
   </svg>
 </div>
-      <!-- Night sky -->
-      <rect x="0" y="0" width="520" height="520" fill="#201808"/>
-      <rect x="0" y="0" width="520" height="140" fill="#18100A"/>
-      <!-- Stars -->
-      <rect x="28" y="16" width="4" height="4" fill="#F8ECC0" opacity=".85"/>
-      <rect x="88" y="8" width="4" height="4" fill="#F8ECC0" opacity=".7"/>
-      <rect x="148" y="22" width="4" height="4" fill="#F8ECC0" opacity=".8"/>
-      <rect x="218" y="10" width="6" height="6" fill="#F8ECC0" opacity=".9"/>
-      <rect x="298" y="18" width="4" height="4" fill="#F8ECC0" opacity=".6"/>
-      <rect x="368" y="7" width="4" height="4" fill="#F8ECC0" opacity=".8"/>
-      <rect x="428" y="28" width="4" height="4" fill="#F8ECC0" opacity=".7"/>
-      <rect x="58" y="40" width="4" height="4" fill="#F8ECC0" opacity=".5"/>
-      <rect x="180" y="48" width="4" height="4" fill="#F8ECC0" opacity=".6"/>
-      <rect x="340" y="36" width="4" height="4" fill="#F8ECC0" opacity=".8"/>
-      <rect x="480" y="14" width="4" height="4" fill="#F8ECC0" opacity=".5"/>
-      <rect x="500" y="42" width="4" height="4" fill="#F8ECC0" opacity=".6"/>
-      <!-- Moon -->
-      <rect x="340" y="36" width="52" height="8" fill="#FAE8B8"/>
-      <rect x="332" y="44" width="68" height="8" fill="#FAE8B8"/>
-      <rect x="328" y="52" width="76" height="24" fill="#FAE8B8"/>
-      <rect x="332" y="76" width="68" height="8" fill="#FAE8B8"/>
-      <rect x="340" y="84" width="52" height="8" fill="#FAE8B8"/>
-      <rect x="344" y="52" width="12" height="8" rx="2" fill="#E8C488" opacity=".5"/>
-      <rect x="364" y="68" width="10" height="7" rx="2" fill="#E8C488" opacity=".4"/>
-      <!-- Buildings bg left -->
-      <rect x="0" y="160" width="52" height="360" fill="#18100A"/>
-      <rect x="8" y="176" width="10" height="10" fill="#D4A030" opacity=".35"/>
-      <rect x="26" y="176" width="10" height="10" fill="#D4A030" opacity=".65"/>
-      <rect x="8" y="198" width="10" height="10" fill="#D4A030" opacity=".2"/>
-      <rect x="26" y="198" width="10" height="10" fill="#D4A030" opacity=".5"/>
-      <rect x="56" y="196" width="44" height="324" fill="#1C140A"/>
-      <rect x="64" y="212" width="8" height="8" fill="#C89828" opacity=".5"/>
-      <rect x="80" y="212" width="8" height="8" fill="#C89828" opacity=".75"/>
-      <rect x="104" y="138" width="70" height="382" fill="#18100A"/>
-      <rect x="114" y="154" width="10" height="10" fill="#D4A828" opacity=".6"/>
-      <rect x="134" y="154" width="10" height="10" fill="#D4A828" opacity=".85"/>
-      <rect x="154" y="154" width="10" height="10" fill="#D4A828" opacity=".3"/>
-      <rect x="114" y="176" width="10" height="10" fill="#D4A828" opacity=".4"/>
-      <rect x="134" y="176" width="10" height="10" fill="#D4A828" opacity=".65"/>
-      <!-- Neon sign -->
-      <rect x="110" y="200" width="60" height="14" rx="1" fill="#8A1818"/>
-      <rect x="113" y="203" width="54" height="8" rx="1" fill="#E02828" opacity=".8"/>
-      <!-- Water tower -->
-      <rect x="178" y="146" width="52" height="36" rx="3" fill="#2A1A0A"/>
-      <rect x="174" y="180" width="60" height="6" fill="#221408"/>
-      <rect x="186" y="186" width="10" height="52" fill="#221408"/>
-      <rect x="216" y="186" width="10" height="52" fill="#221408"/>
-      <rect x="178" y="236" width="52" height="5" fill="#1A1006"/>
-      <!-- Building bg right -->
-      <rect x="420" y="176" width="100" height="344" fill="#18100A"/>
-      <rect x="432" y="190" width="8" height="8" fill="#C89828" opacity=".5"/>
-      <rect x="452" y="190" width="8" height="8" fill="#C89828" opacity=".8"/>
-      <rect x="472" y="190" width="8" height="8" fill="#C89828" opacity=".3"/>
-      <rect x="492" y="190" width="8" height="8" fill="#C89828" opacity=".6"/>
-      <!-- Rooftop -->
-      <rect x="0" y="370" width="520" height="150" fill="#362414"/>
-      <rect x="0" y="358" width="520" height="14" fill="#4A3420"/>
-      <rect x="0" y="350" width="520" height="10" fill="#5A4028"/>
-      <rect x="0" y="344" width="520" height="8" fill="#6A5030"/>
-      <!-- AC unit -->
-      <rect x="20" y="318" width="40" height="28" rx="1" fill="#4A3420"/>
-      <rect x="24" y="314" width="32" height="8" rx="1" fill="#3A2818"/>
-      <rect x="20" y="326" width="40" height="3" fill="#3A2818"/>
-      <!-- Antenna -->
-      <rect x="420" y="270" width="4" height="80" fill="#3A2818"/>
-      <rect x="408" y="270" width="28" height="3" fill="#3A2818"/>
-      <rect x="408" y="266" width="4" height="12" fill="#3A2818"/>
-      <!-- Vent -->
-      <rect x="460" y="300" width="10" height="56" fill="#3A2818"/>
-      <rect x="456" y="296" width="18" height="8" rx="1" fill="#4A3020"/>
-      <!-- Floating docs -->
-      <g transform="translate(38,196) rotate(-13)">
-        <rect width="38" height="50" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-        <rect x="0" y="0" width="38" height="10" rx="1" fill="#1871D0" opacity=".85"/>
-        <rect x="5" y="15" width="28" height="3" fill="#C0B8A0"/>
-        <rect x="5" y="22" width="22" height="3" fill="#C0B8A0"/>
-        <rect x="5" y="29" width="26" height="3" fill="#C0B8A0"/>
-        <rect x="5" y="36" width="18" height="3" fill="#C0B8A0"/>
-      </g>
-      <g transform="translate(106,166) rotate(8)">
-        <rect width="46" height="60" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-        <rect x="0" y="0" width="46" height="11" rx="1" fill="#4A154B" opacity=".85"/>
-        <rect x="6" y="17" width="34" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="24" width="28" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="31" width="32" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="38" width="24" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="45" width="30" height="3" fill="#C0B8A0"/>
-      </g>
-      <g transform="translate(182,212) rotate(-20)">
-        <rect width="34" height="46" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-        <rect x="0" y="0" width="34" height="9" rx="1" fill="#2DB750" opacity=".85"/>
-        <rect x="5" y="14" width="24" height="3" fill="#C0B8A0"/>
-        <rect x="5" y="21" width="20" height="3" fill="#C0B8A0"/>
-        <rect x="5" y="28" width="22" height="3" fill="#C0B8A0"/>
-      </g>
-      <g transform="translate(264,134) rotate(6)">
-        <rect width="42" height="54" rx="1" fill="#F4EFE0" stroke="#C8BBA0" stroke-width="1.5"/>
-        <rect x="0" y="0" width="42" height="10" rx="1" fill="#2281FF" opacity=".85"/>
-        <rect x="6" y="16" width="30" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="23" width="26" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="30" width="28" height="3" fill="#C0B8A0"/>
-        <rect x="6" y="37" width="20" height="3" fill="#C0B8A0"/>
-      </g>
-      <!-- Raccoon tail -->
-      <rect x="406" y="294" width="34" height="12" rx="3" fill="#5C4838"/>
-      <rect x="432" y="276" width="12" height="30" rx="3" fill="#9A8878"/>
-      <rect x="418" y="262" width="30" height="12" rx="3" fill="#5C4838"/>
-      <rect x="418" y="248" width="12" height="18" rx="3" fill="#9A8878"/>
-      <rect x="412" y="238" width="20" height="14" rx="3" fill="#5C4838"/>
-      <rect x="413" y="228" width="18" height="14" rx="3" fill="#E0D8CC"/>
-      <!-- Raccoon body -->
-      <rect x="300" y="286" width="108" height="78" rx="5" fill="#8A7E74"/>
-      <rect x="318" y="294" width="72" height="66" rx="4" fill="#9E9288"/>
-      <rect x="286" y="316" width="22" height="46" rx="4" fill="#7A6E64"/>
-      <rect x="400" y="312" width="22" height="50" rx="4" fill="#7A6E64"/>
-      <rect x="236" y="308" width="66" height="16" rx="4" fill="#8A7E74"/>
-      <rect x="220" y="300" width="22" height="24" rx="4" fill="#9A8878"/>
-      <rect x="406" y="328" width="14" height="34" rx="3" fill="#8A7E74"/>
-      <rect x="396" y="358" width="30" height="16" rx="3" fill="#9A8878"/>
-      <!-- Neck & collar -->
-      <rect x="326" y="270" width="52" height="20" rx="3" fill="#9A8878"/>
-      <rect x="316" y="280" width="72" height="10" rx="2" fill="#8B5A2B"/>
-      <rect x="342" y="286" width="20" height="14" rx="2" fill="#C8901C"/>
-      <!-- Head -->
-      <rect x="300" y="200" width="104" height="76" rx="9" fill="#9A8878"/>
-      <!-- Ears -->
-      <rect x="302" y="184" width="24" height="22" rx="2" fill="#6A5848"/>
-      <rect x="306" y="188" width="16" height="16" rx="1" fill="#9A8878"/>
-      <rect x="308" y="190" width="12" height="12" rx="1" fill="#D4A498"/>
-      <rect x="378" y="180" width="24" height="22" rx="2" fill="#6A5848"/>
-      <rect x="381" y="184" width="16" height="16" rx="1" fill="#9A8878"/>
-      <rect x="383" y="186" width="12" height="12" rx="1" fill="#D4A498"/>
-      <!-- Mask -->
-      <rect x="300" y="220" width="104" height="26" rx="3" fill="#221610"/>
-      <!-- Eyes -->
-      <rect x="310" y="223" width="22" height="17" rx="2" fill="#F0EBE0"/>
-      <rect x="315" y="226" width="12" height="12" rx="2" fill="#1A1210"/>
-      <rect x="316" y="227" width="5" height="5" fill="#F0EBE0"/>
-      <rect x="372" y="223" width="22" height="17" rx="2" fill="#F0EBE0"/>
-      <rect x="377" y="226" width="12" height="12" rx="2" fill="#1A1210"/>
-      <rect x="378" y="227" width="5" height="5" fill="#F0EBE0"/>
-      <!-- Chin & face -->
-      <rect x="314" y="246" width="76" height="28" rx="4" fill="#C4BCB2"/>
-      <rect x="344" y="250" width="16" height="10" rx="2" fill="#2A1810"/>
-      <rect x="332" y="265" width="8" height="3" fill="#2A1810"/>
-      <rect x="362" y="265" width="8" height="3" fill="#2A1810"/>
-      <!-- Magnifying glass -->
-      <rect x="144" y="252" width="60" height="8" rx="1" fill="#9A6A28"/>
-      <rect x="144" y="324" width="60" height="8" rx="1" fill="#9A6A28"/>
-      <rect x="136" y="260" width="8" height="64" rx="1" fill="#9A6A28"/>
-      <rect x="204" y="260" width="8" height="64" rx="1" fill="#9A6A28"/>
-      <rect x="144" y="260" width="8" height="8" fill="#9A6A28"/>
-      <rect x="196" y="260" width="8" height="8" fill="#9A6A28"/>
-      <rect x="144" y="316" width="8" height="8" fill="#9A6A28"/>
-      <rect x="196" y="316" width="8" height="8" fill="#9A6A28"/>
-      <rect x="144" y="260" width="60" height="64" fill="#EDE8D4" opacity=".38"/>
-      <rect x="156" y="270" width="22" height="6" rx="1" fill="#FFF" opacity=".38"/>
-      <rect x="152" y="276" width="8" height="8" rx="1" fill="#FFF" opacity=".22"/>
-      <rect x="210" y="318" width="50" height="12" rx="4" fill="#9A6A28"/>
-<!-- ── Problem strip ─────────────────────────────────────────────── -->
+
+<!-- ── Problem strip ── -->
 <section class="strip" aria-labelledby="problem-heading">
   <div class="section-label">YOU ALREADY KNOW THIS PART</div>
-  <h2 class="section-h2" id="problem-heading">GRC finds the risk. Legal doesn't hear about it. IT doesn't know what to provision.</h2>
-  <div class="card-grid">
-    <div class="card">
-      <div class="card-title">📋 REVIEWS GO NOWHERE</div>
-      <p class="card-desc">GRC scores the policy. Legal negotiates without the findings. IT provisions without knowing what data flows where. No team gets what they need to act on the same assessment.</p>
+  <h2 class="section-h2" id="problem-heading">
+    GRC finds the risk. Legal doesn't hear about it.
+    IT doesn't know what to provision.
+  </h2>
+  <div class="strip-grid">
+    <div class="strip-card">
+      <div class="strip-card-title">📋 REVIEWS GO NOWHERE</div>
+      <p class="strip-card-desc">GRC scores the policy. Legal negotiates without the findings. IT provisions without knowing what data flows where. No team gets what they need to act on the same assessment.</p>
     </div>
-    <div class="card">
-      <div class="card-title">🕳️ HIDDEN RISK</div>
-      <p class="card-desc">AI training clauses buried in DPAs. Breach timelines absent from contracts. Sub-processors unlisted in annexes. Buried in plain sight in documents nobody has time to read.</p>
+    <div class="strip-card">
+      <div class="strip-card-title">🕳️ HIDDEN RISK</div>
+      <p class="strip-card-desc">AI training clauses buried in DPAs. Breach timelines absent from contracts. Sub-processors unlisted in annexes. Buried in plain sight in documents nobody has time to read.</p>
     </div>
-    <div class="card">
-      <div class="card-title">📄 NO VENDOR CONTEXT</div>
-      <p class="card-desc">A healthcare vendor and a marketing tool get the same generic assessment. What the vendor actually does for you — which systems they access, what data flows — changes everything about the risk picture.</p>
+    <div class="strip-card">
+      <div class="strip-card-title">📄 NO VENDOR CONTEXT</div>
+      <p class="strip-card-desc">A healthcare vendor and a marketing tool get the same generic assessment. What the vendor actually does for you — which systems they access, what data flows — changes everything about the risk picture.</p>
     </div>
-    <div class="card">
-      <div class="card-title">🗃️ NOTHING ACCUMULATES</div>
-      <p class="card-desc">One assessment, one spreadsheet, forgotten. No history. No trend. No record of what changed between reviews. Every reassessment starts from scratch as if the last one never happened.</p>
+    <div class="strip-card">
+      <div class="strip-card-title">🗃️ NOTHING ACCUMULATES</div>
+      <p class="strip-card-desc">One assessment, one spreadsheet, forgotten. No history. No trend. No record of what changed between reviews. Every reassessment starts from scratch as if the last one never happened.</p>
     </div>
   </div>
 </section>
 
-<!-- ── Connected Intelligence ───────────────────────────────────── -->
-  <section class="connect-section" aria-labelledby="connect-heading">
-    <div class="section-label">WHAT MAKES IT DIFFERENT</div>
-    <h2 class="section-h2" id="connect-heading">Context built once. Used everywhere.</h2>
-    <p style="font-size:13px;color:var(--muted);text-align:center;font-family:system-ui,sans-serif;margin-bottom:40px;max-width:560px;margin-left:auto;margin-right:auto;line-height:1.7;">Most vendor risk tools treat every assessment the same way. Bandit builds context before it looks — and that context flows forward into every decision.</p>
+<!-- ── Connected Intelligence ── -->
+<section class="connect-section" aria-labelledby="connect-heading">
+  <div class="section-label-mono">WHAT MAKES IT DIFFERENT</div>
+  <h2 class="section-h2-center" id="connect-heading">
+    Context built once. Used everywhere.
+  </h2>
+  <p class="section-lead-center">
+    Most vendor risk tools treat every assessment the
+    same way. Bandit builds context before it looks —
+    and that context flows forward into every decision.
+  </p>
 
-    <div class="connect-flow">
-      <div class="connect-step">
-        <div class="connect-num">01 — CONFIGURE</div>
-        <div class="connect-title">Your org profile</div>
-        <p class="connect-desc">Industry, locations, regulatory frameworks, and your actual internal tools. Set once. Informs every assessment after.</p>
-        <div class="connect-tag">→ shapes weights + regulatory context</div>
-      </div>
-      <div class="connect-step">
-        <div class="connect-num">02 — INTAKE</div>
-        <div class="connect-title">Vendor profile</div>
-        <p class="connect-desc">12 questions per vendor. What data they access, which of your systems they touch, whether they use AI, how critical they are. Stored permanently.</p>
-        <div class="connect-tag">→ personalises every future assessment</div>
-      </div>
-      <div class="connect-step">
-        <div class="connect-num">03 — ASSESS</div>
-        <div class="connect-title">Agents run in sequence</div>
-        <p class="connect-desc">Privacy Bandit, Legal Bandit, and the rubric engine each know what to look for because context from steps 1 and 2 is already loaded before they start.</p>
-        <div class="connect-tag">→ context-aware extraction + scoring</div>
-      </div>
-      <div class="connect-step">
-        <div class="connect-num">04 — ACCUMULATE</div>
-        <div class="connect-title">History builds</div>
-        <p class="connect-desc">Every result writes to the vendor's permanent record. Risk tiers, open findings, renewal dates. The tool gets more useful the more you run it.</p>
-        <div class="connect-tag">→ portfolio intelligence over time</div>
-      </div>
+  <div class="connect-flow">
+    <div class="connect-step">
+      <div class="connect-num">01 — CONFIGURE</div>
+      <div class="connect-title">Your org profile</div>
+      <p class="connect-desc">Industry, locations, regulatory frameworks, and your actual internal tools. Set once. Informs every assessment after.</p>
+      <div class="connect-tag">→ shapes weights + regulatory context</div>
     </div>
-
-    <div class="principle-grid">
-      <div class="principle-card">
-        <div class="principle-title">AI EXTRACTS. BANDIT SCORES.</div>
-        <p class="principle-desc">The LLM extracts evidence signals — present or absent. The rubric converts them to scores using fixed, published rules. Same policy, same score, regardless of which model you use. The scoring logic is never a black box.</p>
-      </div>
-      <div class="principle-card">
-        <div class="principle-title">VENDOR FUNCTION OVER INDUSTRY</div>
-        <p class="principle-desc">What matters isn't just your sector — it's what the vendor does for you. A tech company using NetSuite for finance needs different scrutiny than one using it for CRM. Bandit knows the difference and adjusts accordingly.</p>
-      </div>
-      <div class="principle-card">
-        <div class="principle-title">THE RUBRIC IS PUBLISHED</div>
-        <p class="principle-desc">Every dimension, every scoring threshold, every enforcement precedent is documented in RUBRIC.md and versioned independently of the application. Changes are attributable. Scores are auditable. Nothing is proprietary.</p>
-      </div>
+    <div class="connect-step">
+      <div class="connect-num">02 — INTAKE</div>
+      <div class="connect-title">Vendor profile</div>
+      <p class="connect-desc">12 questions per vendor. What data they access, which of your systems they touch, whether they use AI, how critical they are. Stored permanently.</p>
+      <div class="connect-tag">→ personalises every future assessment</div>
     </div>
-  </section>
+    <div class="connect-step">
+      <div class="connect-num">03 — ASSESS</div>
+      <div class="connect-title">Agents run in sequence</div>
+      <p class="connect-desc">Privacy Bandit, Legal Bandit, and the rubric engine each know what to look for because context from steps 1 and 2 is already loaded before they start.</p>
+      <div class="connect-tag">→ context-aware extraction + scoring</div>
+    </div>
+    <div class="connect-step">
+      <div class="connect-num">04 — ACCUMULATE</div>
+      <div class="connect-title">History builds</div>
+      <p class="connect-desc">Every result writes to the vendor's permanent record. Risk tiers, open findings, renewal dates. The tool gets more useful the more you run it.</p>
+      <div class="connect-tag">→ portfolio intelligence over time</div>
+    </div>
+  </div>
 
-<!-- ── Crew ──────────────────────────────────────────────────────── -->
-<section class="crew" id="crew" aria-labelledby="crew-heading">
-  <div class="section-label">MEET THE CREW</div>
-  <h2 class="section-h2" id="crew-heading">Each Bandit is a specialised AI agent.</h2>
-  <p style="font-size:13px;color:var(--muted);text-align:center;font-family:system-ui,sans-serif;margin-bottom:32px;">Modular Python agents. Each one knows its domain, picks its own tools, and adapts to what it finds. Use one or run the whole crew.</p>
+  <div class="principle-grid">
+    <div class="principle-item">
+      <div class="label">Core Principle</div>
+      <h3>AI extracts. Bandit scores.</h3>
+      <p>The LLM extracts evidence signals — present or absent. The rubric converts them to scores using fixed, published rules. Same policy, same score, regardless of which model you use.</p>
+    </div>
+    <div class="principle-item">
+      <div class="label">Core Principle</div>
+      <h3>Vendor function over industry.</h3>
+      <p>What matters isn't just your sector — it's what the vendor does for you. A tech company using NetSuite for finance needs different scrutiny than one using it for CRM. Bandit knows the difference.</p>
+    </div>
+    <div class="principle-item">
+      <div class="label">Core Principle</div>
+      <h3>The rubric is published.</h3>
+      <p>Every dimension, every scoring threshold, every enforcement precedent is documented in RUBRIC.md and versioned independently of the application. Changes are attributable. Scores are auditable. Nothing is proprietary.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Crew ── -->
+<section class="crew-section" id="crew" aria-labelledby="crew-heading">
+  <div class="section-label-mono">MEET THE CREW</div>
+  <h2 class="section-h2-center" id="crew-heading">
+    Each Bandit is a specialised AI agent.
+  </h2>
+  <p class="section-lead-center">
+    Modular agents. Each one knows its domain,
+    picks its own tools, and adapts to what it finds.
+    Use one or run the whole crew.
+  </p>
   <div class="crew-grid">
-
-    <!-- Privacy Bandit -->
-    <div class="crew-card live">
-      <svg class="crew-avatar" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <rect x="16" y="14" width="32" height="26" rx="5" fill="#9A8878"/>
-        <rect x="10" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="13" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="40" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="43" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="16" y="20" width="32" height="12" fill="#241810"/>
-        <rect x="19" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="22" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="34" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="37" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="20" y="32" width="24" height="10" rx="2" fill="#C4BCB2"/>
-        <rect x="28" y="34" width="8" height="5" rx="1" fill="#2C1A10"/>
-        <rect x="16" y="38" width="32" height="6" rx="1" fill="#8B5A2B"/>
-        <rect x="26" y="43" width="12" height="11" rx="1" fill="#C8901C"/>
-        <circle cx="26" cy="57" r="8" fill="none" stroke="#8B5A2B" stroke-width="2.5"/>
-        <line x1="32" y1="63" x2="38" y2="70" stroke="#8B5A2B" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
-      <div class="crew-code">PRIVACY</div>
-      <div class="crew-role">Policy Scout</div>
-      <p class="crew-desc">Privacy policy scoring across 8 GDPR/CCPA dimensions</p>
-      <span class="badge badge-live">LIVE</span>
+    <div class="crew-card">
+      <span class="icon" style="color:var(--amber)">P</span>
+      <h3>Privacy Bandit</h3>
+      <p>Policy Scout. Privacy policy scoring across 8 GDPR/CCPA dimensions with evidence extraction and contract redlines.</p>
+      <span class="tag-live">LIVE</span>
     </div>
-
-    <!-- Legal Bandit -->
-    <div class="crew-card live">
-      <svg class="crew-avatar" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <rect x="16" y="14" width="32" height="26" rx="5" fill="#9A8878"/>
-        <rect x="10" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="13" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="40" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="43" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="16" y="20" width="32" height="12" fill="#241810"/>
-        <rect x="19" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="22" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="34" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="37" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="20" y="32" width="24" height="10" rx="2" fill="#C4BCB2"/>
-        <rect x="16" y="38" width="32" height="6" rx="1" fill="#534AB7"/>
-        <rect x="28" y="46" width="4" height="16" rx="1" fill="#534AB7"/>
-        <rect x="20" y="48" width="24" height="3" rx="1" fill="#534AB7"/>
-        <rect x="20" y="51" width="10" height="10" rx="1" fill="none" stroke="#534AB7" stroke-width="1.5"/>
-        <rect x="34" y="51" width="10" height="10" rx="1" fill="none" stroke="#534AB7" stroke-width="1.5"/>
-      </svg>
-      <div class="crew-code" style="color:#534AB7">LEGAL</div>
-      <div class="crew-role">Contract Cracker</div>
-      <p class="crew-desc">MSA and DPA risk clause detection · GDPR Art. 28 checklist · redline brief</p>
-      <span class="badge badge-live">LIVE</span>
+    <div class="crew-card">
+      <span class="icon" style="color:var(--blue)">L</span>
+      <h3>Legal Bandit</h3>
+      <p>Contract Cracker. GDPR Art. 28(3) DPA checklist, verbatim clause extraction, policy/contract conflict detection, redline briefs.</p>
+      <span class="tag-live">LIVE</span>
     </div>
-
-    <!-- AI Bandit -->
-    <div class="crew-card dim">
-      <svg class="crew-avatar" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <rect x="16" y="14" width="32" height="26" rx="5" fill="#9A8878"/>
-        <rect x="10" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="13" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="40" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="43" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="16" y="20" width="32" height="12" fill="#241810"/>
-        <rect x="19" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="22" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="34" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="37" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="20" y="32" width="24" height="10" rx="2" fill="#C4BCB2"/>
-        <rect x="16" y="38" width="32" height="6" rx="1" fill="#0F6E56"/>
-        <circle cx="22" cy="52" r="5" fill="none" stroke="#0F6E56" stroke-width="1.5"/>
-        <circle cx="42" cy="52" r="5" fill="none" stroke="#0F6E56" stroke-width="1.5"/>
-        <circle cx="32" cy="60" r="5" fill="none" stroke="#0F6E56" stroke-width="1.5"/>
-        <line x1="27" y1="52" x2="37" y2="52" stroke="#0F6E56" stroke-width="1.2"/>
-        <line x1="22" y1="57" x2="28" y2="58" stroke="#0F6E56" stroke-width="1.2"/>
-        <line x1="42" y1="57" x2="36" y2="58" stroke="#0F6E56" stroke-width="1.2"/>
-      </svg>
-      <div class="crew-code" style="color:#0F6E56">AI</div>
-      <div class="crew-role">Model Mole</div>
-      <p class="crew-desc">AI training risk and model usage terms</p>
-      <span class="badge badge-soon">COMING SOON</span>
+    <div class="crew-card">
+      <span class="icon" style="color:var(--purple)">A</span>
+      <h3>AI Bandit</h3>
+      <p>Model Mole. AI training risk, model usage terms, EU AI Act compliance, training data opt-out assessment.</p>
+      <span class="tag-soon">COMING SOON</span>
     </div>
-
-    <!-- Audit Bandit -->
-    <div class="crew-card dim">
-      <svg class="crew-avatar" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <rect x="16" y="14" width="32" height="26" rx="5" fill="#9A8878"/>
-        <rect x="10" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="13" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="40" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="43" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="16" y="20" width="32" height="12" fill="#241810"/>
-        <rect x="19" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="22" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="34" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="37" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="20" y="32" width="24" height="10" rx="2" fill="#C4BCB2"/>
-        <rect x="16" y="38" width="32" height="6" rx="1" fill="#185FA5"/>
-        <rect x="22" y="46" width="20" height="22" rx="1" fill="none" stroke="#185FA5" stroke-width="1.5"/>
-        <rect x="27" y="44" width="10" height="6" rx="1" fill="#185FA5"/>
-        <line x1="25" y1="55" x2="29" y2="60" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round"/>
-        <line x1="29" y1="60" x2="39" y2="51" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round"/>
-      </svg>
-      <div class="crew-code" style="color:#185FA5">AUDIT</div>
-      <div class="crew-role">SOC Stalker</div>
-      <p class="crew-desc">SOC 2 and ISO 27001 gap analysis</p>
-      <span class="badge badge-soon">COMING SOON</span>
+    <div class="crew-card">
+      <span class="icon" style="color:var(--green)">S</span>
+      <h3>Audit Bandit</h3>
+      <p>SOC Stalker. SOC 2 Type II gap analysis, ISO 27001/27701 certification review, attestation completeness check.</p>
+      <span class="tag-soon">COMING SOON</span>
     </div>
-
-    <!-- Data Bandit -->
-    <div class="crew-card dim">
-      <svg class="crew-avatar" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <rect x="16" y="14" width="32" height="26" rx="5" fill="#9A8878"/>
-        <rect x="10" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="13" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="40" y="8" width="14" height="14" rx="2" fill="#6A5848"/>
-        <rect x="43" y="11" width="8" height="10" rx="1" fill="#D4A498"/>
-        <rect x="16" y="20" width="32" height="12" fill="#241810"/>
-        <rect x="19" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="22" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="34" y="22" width="11" height="8" rx="1" fill="#F0EBE0"/>
-        <rect x="37" y="24" width="6" height="5" rx="1" fill="#1A1210"/>
-        <rect x="20" y="32" width="24" height="10" rx="2" fill="#C4BCB2"/>
-        <rect x="16" y="38" width="32" height="6" rx="1" fill="#854F0B"/>
-        <rect x="20" y="48" width="7" height="16" rx="1" fill="#854F0B"/>
-        <rect x="29" y="44" width="7" height="20" rx="1" fill="#BA7517"/>
-        <rect x="38" y="40" width="7" height="24" rx="1" fill="#EF9F27"/>
-        <rect x="18" y="63" width="30" height="3" fill="#854F0B"/>
-      </svg>
-      <div class="crew-code" style="color:#854F0B">DATA</div>
-      <div class="crew-role">Flow Tracer</div>
-      <p class="crew-desc">Data flow mapping and transfer analysis</p>
-      <span class="badge badge-soon">COMING SOON</span>
-    </div>
-
-  </div>
-</section>
-
-<!-- ── What you get ───────────────────────────────────────────────── -->
-<section class="wyg-section" aria-labelledby="wyg-heading">
-  <div class="section-label">WHAT YOU GET</div>
-  <h2 class="section-h2" id="wyg-heading">One command. A complete picture.</h2>
-  <p style="font-size:13px;color:var(--muted);text-align:center;font-family:system-ui,sans-serif;margin-bottom:32px;">Every <code style="font-family:inherit;background:var(--cream);padding:1px 5px;border-radius:2px;border:1px solid var(--border);">bandit assess</code> run saves an HTML report alongside the terminal output.</p>
-  <div class="wyg-grid">
-    <div class="wyg-card">
-      <div class="wyg-icon">✓</div>
-      <div class="wyg-title">EVIDENCE &amp; GAPS</div>
-      <p class="wyg-desc">Each dimension shows what was confirmed in the policy and what's missing — with the specific signal that would close the gap.</p>
-    </div>
-    <div class="wyg-card">
-      <div class="wyg-icon">⚠</div>
-      <div class="wyg-title">RED FLAGS</div>
-      <p class="wyg-desc">Enforcement-backed phrases that cap the score. Shown with the matched text so you can verify them directly.</p>
-    </div>
-    <div class="wyg-card">
-      <div class="wyg-icon">📝</div>
-      <div class="wyg-title">CONTRACT REDLINES</div>
-      <p class="wyg-desc">For scores ≤ 3, specific DPA and MSA language to request from the vendor — ready for Legal to paste into negotiations.</p>
-    </div>
-    <div class="wyg-card">
-      <div class="wyg-icon">✉</div>
-      <div class="wyg-title">VENDOR EMAIL</div>
-      <p class="wyg-desc">A consolidated follow-up email with all gap questions, formatted and ready to send to the vendor's privacy or legal team.</p>
-    </div>
-    <div class="wyg-card">
-      <div class="wyg-icon">📁</div>
-      <div class="wyg-title">DOCUMENT INTELLIGENCE</div>
-      <p class="wyg-desc">Upload DPAs, MSAs, SOC 2 reports and AI policies from a local folder or Google Drive. Bandit auto-detects document types, extracts signals, and merges findings across all sources. Every score shows exactly which document provided the evidence.</p>
-    </div>
-    <div class="wyg-card">
-      <div class="wyg-icon">🏢</div>
-      <div class="wyg-title">BUILT FOR YOUR CONTEXT</div>
-      <p class="wyg-desc">Run <code style="font-family:inherit;background:var(--cream);padding:1px 5px;border-radius:2px;border:1px solid var(--border);">bandit setup</code> once. Tell Bandit your industry, location, and regulatory frameworks. Every assessment after that is weighted and calibrated for your specific situation.</p>
-    </div>
-    <div class="wyg-card">
-      <div class="wyg-icon">🗂</div>
-      <div class="wyg-title">VENDOR INTELLIGENCE</div>
-      <p class="wyg-desc">Run <code style="font-family:inherit;background:var(--cream);padding:1px 5px;border-radius:2px;border:1px solid var(--border);">bandit vendor add</code> to capture what data a vendor touches, how they're integrated, and when they renew. Assessment weights adjust automatically, and every result is stored in a history you can track over time.</p>
+    <div class="crew-card">
+      <span class="icon" style="color:#c85a2c">D</span>
+      <h3>Data Bandit</h3>
+      <p>Flow Tracer. Data flow mapping, transfer analysis, sub-processor chain tracing.</p>
+      <span class="tag-soon">COMING SOON</span>
     </div>
   </div>
 </section>
 
-<!-- ── Rubric section ─────────────────────────────────────────────── -->
+<hr class="divider">
+
+<!-- ── What You Get ── -->
+<section class="content-section" aria-labelledby="wyg-heading">
+  <div class="section-label-mono">WHAT YOU GET</div>
+  <h2 class="section-h2-center" id="wyg-heading">
+    One command. A complete picture.
+  </h2>
+  <p class="section-lead-center">
+    Every <code style="font-family:'JetBrains Mono',monospace;font-size:13px;background:rgba(0,0,0,0.04);padding:2px 6px;border-radius:4px">bandit assess</code> run saves an HTML report alongside the terminal output.
+  </p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#fef3e2;color:var(--amber)">01</div>
+      <h3>Evidence &amp; Gaps</h3>
+      <p>Each dimension shows what was confirmed and what's missing — with the specific signal that would close the gap.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#fceaea;color:var(--red)">02</div>
+      <h3>Red Flags</h3>
+      <p>Enforcement-backed phrases that cap the score. Shown with matched text so you can verify them directly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#e8f0fa;color:var(--blue)">03</div>
+      <h3>Contract Redlines</h3>
+      <p>For scores ≤ 3, specific DPA and MSA language to request from the vendor — ready for Legal to paste into negotiations.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#e8f5ee;color:var(--green)">04</div>
+      <h3>Legal Brief</h3>
+      <p>A standalone redline brief for your legal team. Current contract language verbatim, gaps identified, replacement clauses provided.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#fef3e2;color:var(--amber)">05</div>
+      <h3>Document Intelligence</h3>
+      <p>Upload DPAs, MSAs, SOC 2 reports from a local folder or Google Drive. Bandit auto-detects document types and merges findings across all sources.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f3eef8;color:var(--purple)">06</div>
+      <h3>Vendor Profile</h3>
+      <p>Run bandit vendor add once per vendor. Assessment history, risk trends, renewal dates, and IT notification queue — all stored permanently.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#e8f0fa;color:var(--blue)">07</div>
+      <h3>Vendor Email</h3>
+      <p>A consolidated follow-up email with all gap questions, formatted and ready to send to the vendor's privacy or legal team.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Rubric ── -->
 <section class="rubric-section" id="rubric" aria-labelledby="rubric-heading">
-  <div class="section-label">THE BANDIT RUBRIC</div>
-  <h2 class="section-h2" id="rubric-heading">Consistent scores regardless of which AI you use.</h2>
-  <p style="font-size:13px;color:var(--muted);text-align:center;font-family:system-ui,sans-serif;margin-bottom:32px;max-width:560px;margin-left:auto;margin-right:auto;line-height:1.7;">The AI extracts evidence. Bandit scores it. A published, enforcement-grounded rubric — built from GDPR enforcement actions, FTC settlements, and EDPB guidelines — means GPT-4o and Claude produce the same score from the same policy.</p>
-  <div class="rubric-grid">
+  <div class="section-label-mono">THE BANDIT RUBRIC</div>
+  <h2 class="section-h2-center" id="rubric-heading">
+    Consistent scores regardless of which AI you use.
+  </h2>
+  <p class="section-lead-center">
+    The AI extracts evidence. Bandit scores it. A published,
+    enforcement-grounded rubric — built from GDPR enforcement
+    actions, FTC settlements, and EDPB guidelines — means
+    GPT-4o and Claude produce the same score from the same policy.
+  </p>
+  <div class="rubric-grid max-900">
     <div class="rubric-card">
       <div class="rubric-dim">D1</div>
       <div class="rubric-name">Data minimization</div>
@@ -976,32 +661,37 @@
       <div class="rubric-name">Breach notification</div>
       <div class="rubric-cite">GDPR Art. 33 · Meta €251M Dec 2024</div>
     </div>
-    <div class="rubric-card" style="border-color:var(--brown);">
+    <div class="rubric-card weighted">
       <div class="rubric-dim">D6 ×1.5</div>
       <div class="rubric-name">AI/ML data usage</div>
-      <div class="rubric-cite">EU AI Act 2024 · FTC disgorgement · Everalbum</div>
+      <div class="rubric-cite">EU AI Act 2024 · FTC · Everalbum</div>
     </div>
     <div class="rubric-card">
       <div class="rubric-dim">D7</div>
       <div class="rubric-name">Retention &amp; deletion</div>
       <div class="rubric-cite">GDPR Art. 5(1)(e) · Netflix €4.75M Dec 2024</div>
     </div>
-    <div class="rubric-card" style="border-color:var(--brown);">
+    <div class="rubric-card weighted">
       <div class="rubric-dim">D8 ×1.5</div>
       <div class="rubric-name">DPA completeness</div>
       <div class="rubric-cite">GDPR Art. 28(3)(a)–(h) · EDPB Guidelines 7/2020</div>
     </div>
   </div>
-  <div style="text-align:center;margin-top:28px;">
-    <a class="btn-ghost" href="https://github.com/conorrusso/bandit/blob/main/core/scoring/RUBRIC.md" target="_blank" rel="noopener">READ THE FULL RUBRIC →</a>
+  <div style="text-align:center;margin-top:28px">
+    <a href="https://github.com/conorrusso/bandit/blob/main/core/scoring/RUBRIC.md"
+       target="_blank" rel="noopener" class="btn-secondary">
+      Read the Full Rubric →
+    </a>
   </div>
 </section>
 
-<!-- ── Provider section ───────────────────────────────────────────── -->
+<!-- ── Providers ── -->
 <section class="provider-section" aria-labelledby="provider-heading">
-  <div class="section-label">PROVIDER-AGNOSTIC</div>
-  <h2 class="section-h2" id="provider-heading">Your API key. Your infrastructure. Your choice.</h2>
-  <div class="provider-grid">
+  <div class="section-label-mono">PROVIDER-AGNOSTIC</div>
+  <h2 class="section-h2-center" id="provider-heading">
+    Your API key. Your infrastructure. Your choice.
+  </h2>
+  <div class="provider-grid max-900">
     <div class="provider-card">
       <div class="provider-name">Claude</div>
       <div class="provider-model">claude-opus-4-6</div>
@@ -1036,16 +726,24 @@
   </div>
 </section>
 
+<hr class="divider">
 
+<!-- ── Tagline ── -->
 <section class="tagline-section">
-  <h2 class="tagline-h">Every vendor has something <span>to hide.</span></h2>
+  <h2 class="tagline-h">
+    Every vendor has something <span>to hide.</span>
+  </h2>
   <p class="tagline-sub">Bandit finds it first. Free, open source, forever.</p>
   <div class="tagline-cta">
-    <a class="btn-primary" href="https://github.com/conorrusso/bandit" target="_blank" rel="noopener">GET STARTED ON GITHUB</a>
+    <a href="https://github.com/conorrusso/bandit"
+       target="_blank" rel="noopener"
+       class="btn-primary" style="background:var(--amber);color:var(--ink)">
+      Get Started on GitHub
+    </a>
   </div>
 </section>
 
-<!-- ── Install strip ─────────────────────────────────────────────── -->
+<!-- ── Install strip ── -->
 <section class="install-section" aria-labelledby="install-heading">
   <div class="section-label">GET STARTED IN 60 SECONDS</div>
   <h2 class="section-h2" id="install-heading">Clone, install, assess.</h2>
@@ -1059,28 +757,36 @@ cd bandit</div>
     <div class="install-step">
       <div class="install-step-label">2 — Install</div>
       <div class="install-code">pip install -e .
-<span style="color:var(--muted);font-size:11px"># With Google Drive support:</span>
+<span class="install-muted"># With Google Drive support:</span>
 pip install -e ".[drive]"</div>
     </div>
     <div class="install-step">
       <div class="install-step-label">3 — Setup &amp; Assess</div>
       <div class="install-code">bandit setup &amp;&amp; bandit assess "Salesforce"
-<span style="color:var(--muted);font-size:11px"># With Drive documents:</span>
+<span class="install-muted"># With Drive documents:</span>
 bandit setup --drive &amp;&amp; bandit assess "Salesforce" --drive</div>
     </div>
   </div>
-  <div style="text-align:center;">
-    <a class="btn-primary" href="https://github.com/conorrusso/bandit" target="_blank" rel="noopener" style="background:var(--brown);">VIEW ON GITHUB ↗</a>
+  <div style="text-align:center">
+    <a href="https://github.com/conorrusso/bandit"
+       target="_blank" rel="noopener"
+       class="btn-primary" style="background:var(--amber);color:var(--ink)">
+      View on GitHub ↗
+    </a>
   </div>
 </section>
 
-<!-- ── Roadmap ────────────────────────────────────────────────────── -->
+<!-- ── Roadmap ── -->
 <section class="roadmap-section" id="roadmap" aria-labelledby="roadmap-heading">
-  <div class="section-label">THE ROADMAP</div>
-  <h2 class="section-h2" id="roadmap-heading">Built for the full vendor lifecycle.</h2>
-  <p style="font-size:13px;color:var(--muted);text-align:center;font-family:system-ui,sans-serif;margin-bottom:36px;max-width:520px;margin-left:auto;margin-right:auto;line-height:1.7;">Privacy Bandit is live today. The rest of the crew ships as each agent is ready.</p>
+  <div class="section-label-mono">THE ROADMAP</div>
+  <h2 class="section-h2-center" id="roadmap-heading">
+    Built for the full vendor lifecycle.
+  </h2>
+  <p class="section-lead-center">
+    Privacy Bandit is live today.
+    The rest of the crew ships as each agent is ready.
+  </p>
   <div class="roadmap-timeline">
-
     <div class="roadmap-card live">
       <div class="roadmap-version">v1.0</div>
       <div class="roadmap-name">Privacy Bandit</div>
@@ -1090,246 +796,199 @@ bandit setup --drive &amp;&amp; bandit assess "Salesforce" --drive</div>
         <li>HTML reports with redlines</li>
         <li>Provider-agnostic</li>
       </ul>
-      <span class="badge badge-live">LIVE</span>
+      <span class="badge-live">LIVE</span>
     </div>
-
     <div class="roadmap-card live">
       <div class="roadmap-version">v1.1</div>
       <div class="roadmap-name">Document Sources</div>
       <ul class="roadmap-features">
         <li>Local folder + Google Drive</li>
         <li>DPA, MSA, SOC 2, BAA, AI policies</li>
-        <li>Full D8 scoring</li>
-        <li>Signal source attribution</li>
+        <li>Full D8 scoring from DPA</li>
         <li>47 document types</li>
       </ul>
-      <span class="badge badge-live">LIVE</span>
+      <span class="badge-live">LIVE</span>
     </div>
-
     <div class="roadmap-card live">
       <div class="roadmap-version">v1.2</div>
       <div class="roadmap-name">Legal Bandit</div>
       <ul class="roadmap-features">
         <li>GDPR Art. 28 DPA checklist</li>
-        <li>MSA commercial terms</li>
+        <li>Verbatim contract extraction</li>
+        <li>Policy/contract conflicts</li>
         <li>Redline brief output</li>
       </ul>
-      <span class="badge badge-live">LIVE</span>
+      <span class="badge-live">LIVE</span>
     </div>
-
     <div class="roadmap-card live">
       <div class="roadmap-version">v1.3</div>
       <div class="roadmap-name">Vendor Intelligence</div>
       <ul class="roadmap-features">
         <li>12-question intake wizard</li>
+        <li>Tech stack integration context</li>
         <li>Assessment history</li>
-        <li>IT notification queue</li>
+        <li>Drive profile sync</li>
       </ul>
-      <span class="badge badge-live">LIVE</span>
+      <span class="badge-live">LIVE</span>
     </div>
-
     <div class="roadmap-card">
       <div class="roadmap-version">v1.4</div>
       <div class="roadmap-name">Dashboard + Scheduling</div>
       <ul class="roadmap-features">
+        <li>Portfolio risk dashboard</li>
         <li>Reassessment scheduling</li>
-        <li>IT notification sending</li>
-        <li>Policy change monitoring</li>
-        <li>Portfolio dashboard</li>
+        <li>Slack notifications</li>
+        <li>TPRM register export</li>
       </ul>
-      <span class="badge badge-planned">PLANNED</span>
+      <span class="badge-planned">PLANNED</span>
     </div>
-
   </div>
 </section>
 
-<!-- ── Cave footer scene ─────────────────────────────────────────── -->
-<div class="cave-scene" aria-hidden="true">
-  <svg viewBox="0 0 1000 440" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
-    <!-- Above ground -->
-    <rect x="0" y="0" width="1000" height="44" fill="#A8CC6A"/>
-    <rect x="0" y="38" width="1000" height="16" fill="#4A8018"/>
-    <rect x="0" y="50" width="1000" height="10" fill="#3A6C10"/>
-    <!-- Grass tufts -->
-    <rect x="80" y="36" width="8" height="18" rx="2" fill="#3A6C10"/>
-    <rect x="92" y="32" width="10" height="22" rx="2" fill="#2E5C0C"/>
-    <rect x="200" y="34" width="8" height="20" rx="2" fill="#3A6C10"/>
-    <rect x="340" y="36" width="10" height="16" rx="2" fill="#2E5C0C"/>
-    <rect x="500" y="32" width="8" height="22" rx="2" fill="#3A6C10"/>
-    <rect x="640" y="36" width="10" height="18" rx="2" fill="#2E5C0C"/>
-    <rect x="780" y="34" width="8" height="20" rx="2" fill="#3A6C10"/>
-    <rect x="900" y="36" width="10" height="16" rx="2" fill="#3A6C10"/>
-    <!-- Earth layers -->
-    <rect x="0" y="60" width="1000" height="18" fill="#8B6030"/>
-    <rect x="0" y="78" width="1000" height="14" fill="#7A5228"/>
-    <rect x="0" y="92" width="1000" height="12" fill="#6A4420"/>
-    <rect x="0" y="104" width="1000" height="12" fill="#5A3818"/>
-    <rect x="0" y="116" width="1000" height="10" fill="#4A2E12"/>
-    <rect x="0" y="126" width="1000" height="16" fill="#3A2410"/>
-    <!-- Cave interior -->
-    <rect x="0" y="142" width="1000" height="298" fill="#2E1C0C"/>
-    <!-- Cave walls -->
-    <rect x="0" y="148" width="58" height="292" fill="#3A2410"/>
-    <rect x="942" y="148" width="58" height="292" fill="#3A2410"/>
-    <!-- Stalactites -->
-    <rect x="87" y="126" width="4" height="40" rx="0 0 3 3" fill="#2A1808"/>
-    <rect x="173" y="126" width="5" height="34" rx="0 0 3 3" fill="#2A1808"/>
-    <rect x="292" y="126" width="4" height="38" rx="0 0 2 2" fill="#2A1808"/>
-    <rect x="463" y="126" width="6" height="40" rx="0 0 3 3" fill="#2A1808"/>
-    <rect x="662" y="126" width="4" height="32" rx="0 0 2 2" fill="#2A1808"/>
-    <rect x="803" y="126" width="6" height="44" rx="0 0 3 3" fill="#2A1808"/>
-    <rect x="902" y="126" width="4" height="28" rx="0 0 2 2" fill="#2A1808"/>
-    <!-- Cave floor -->
-    <rect x="0" y="390" width="1000" height="50" fill="#3A2410"/>
-    <rect x="0" y="384" width="1000" height="8" fill="#4A3018"/>
-    <!-- Rug -->
-    <rect x="260" y="385" width="480" height="14" rx="2" fill="#6A3018"/>
-    <rect x="264" y="388" width="472" height="8" rx="1" fill="#7A3C20"/>
-    <!-- Filing cabinet -->
-    <rect x="68" y="238" width="90" height="154" rx="2" fill="#6A4A1C"/>
-    <rect x="72" y="242" width="82" height="146" rx="1" fill="#7A5A2A"/>
-    <rect x="76" y="246" width="74" height="40" rx="1" fill="#4A3010"/>
-    <rect x="80" y="250" width="66" height="8" rx="1" fill="#1A5C2A"/>
-    <rect x="102" y="262" width="22" height="8" rx="2" fill="#8B6030"/>
-    <rect x="82" y="266" width="46" height="4" fill="#C8B898" opacity=".5"/>
-    <rect x="76" y="294" width="74" height="40" rx="1" fill="#4A3010"/>
-    <rect x="80" y="298" width="66" height="8" rx="1" fill="#7A4A0A"/>
-    <rect x="102" y="310" width="22" height="8" rx="2" fill="#8B6030"/>
-    <rect x="82" y="314" width="38" height="4" fill="#C8B898" opacity=".5"/>
-    <rect x="76" y="342" width="74" height="40" rx="1" fill="#4A3010"/>
-    <rect x="80" y="346" width="66" height="8" rx="1" fill="#7A1A1A"/>
-    <rect x="102" y="358" width="22" height="8" rx="2" fill="#8B6030"/>
-    <rect x="82" y="362" width="42" height="4" fill="#C8B898" opacity=".5"/>
-    <rect x="68" y="218" width="90" height="22" rx="2" fill="#5A3C10"/>
-    <!-- Hanging lamp -->
-    <rect x="497" y="126" width="6" height="52" fill="#2A1808"/>
-    <rect x="474" y="176" width="52" height="8" rx="2" fill="#8B6A28"/>
-    <rect x="470" y="184" width="60" height="28" rx="4" fill="#6A4E1C"/>
-    <rect x="481" y="202" width="38" height="22" rx="4" fill="#F0C840" opacity=".9"/>
-    <rect x="485" y="206" width="30" height="14" rx="2" fill="#FFF" opacity=".45"/>
-    <rect x="380" y="368" width="240" height="20" fill="#F0C840" opacity=".07"/>
-    <rect x="400" y="338" width="200" height="32" fill="#F0C840" opacity=".05"/>
-    <!-- HQ sign -->
-    <rect x="380" y="148" width="240" height="48" rx="3" fill="#3A2410"/>
-    <rect x="384" y="152" width="232" height="40" rx="2" fill="#4A3018"/>
-    <text x="500" y="179" text-anchor="middle" font-family="'Courier New',monospace" font-size="20" font-weight="700" fill="#C89A48" letter-spacing="4">BANDIT HQ</text>
-    <!-- Desk -->
-    <rect x="316" y="342" width="368" height="18" rx="2" fill="#7A5028"/>
-    <rect x="320" y="358" width="4" height="36" rx="1" fill="#6A4020"/>
-    <rect x="680" y="358" width="4" height="36" rx="1" fill="#6A4020"/>
-    <!-- Monitor -->
-    <rect x="408" y="262" width="148" height="82" rx="3" fill="#18100A"/>
-    <rect x="412" y="266" width="140" height="74" rx="2" fill="#0A3040"/>
-    <rect x="416" y="270" width="132" height="8" fill="#082838"/>
-    <rect x="418" y="282" width="64" height="5" rx="1" fill="#2CB84A" opacity=".9"/>
-    <rect x="418" y="291" width="42" height="5" rx="1" fill="#DD2828" opacity=".9"/>
-    <rect x="418" y="300" width="54" height="5" rx="1" fill="#2CB84A" opacity=".9"/>
-    <rect x="418" y="309" width="32" height="5" rx="1" fill="#E89820" opacity=".9"/>
-    <rect x="418" y="318" width="58" height="5" rx="1" fill="#2CB84A" opacity=".9"/>
-    <rect x="490" y="282" width="56" height="16" rx="2" fill="#DD2828" opacity=".8"/>
-    <rect x="473" y="344" width="20" height="8" rx="1" fill="#18100A"/>
-    <rect x="460" y="350" width="46" height="6" rx="1" fill="#18100A"/>
-    <!-- Keyboard -->
-    <rect x="360" y="344" width="88" height="10" rx="1" fill="#221810"/>
-    <rect x="363" y="346" width="82" height="6" rx="1" fill="#302418"/>
-    <!-- Papers -->
-    <rect x="322" y="330" width="40" height="54" rx="1" fill="#F4EFE0" opacity=".88"/>
-    <rect x="326" y="334" width="32" height="3" fill="#C0B898" opacity=".7"/>
-    <rect x="326" y="340" width="28" height="3" fill="#C0B898" opacity=".7"/>
-    <rect x="326" y="346" width="30" height="3" fill="#C0B898" opacity=".7"/>
-    <rect x="326" y="352" width="22" height="3" fill="#C0B898" opacity=".7"/>
-    <!-- Coffee mug -->
-    <rect x="636" y="316" width="28" height="32" rx="2" fill="#6A3820"/>
-    <rect x="640" y="320" width="20" height="24" rx="1" fill="#381808"/>
-    <rect x="662" y="322" width="8" height="4" rx="1" fill="#6A3820"/>
-    <rect x="662" y="334" width="8" height="4" rx="1" fill="#6A3820"/>
-    <rect x="644" y="308" width="4" height="8" rx="2" fill="#C8B898" opacity=".35"/>
-    <rect x="651" y="304" width="4" height="11" rx="2" fill="#C8B898" opacity=".28"/>
-    <!-- Raccoon at desk - chair -->
-    <rect x="440" y="306" width="120" height="90" rx="3" fill="#5A3818"/>
-    <rect x="446" y="310" width="108" height="82" rx="2" fill="#6A4828"/>
-    <rect x="428" y="380" width="144" height="22" rx="3" fill="#5A3818"/>
-    <rect x="434" y="400" width="8" height="28" rx="2" fill="#4A3018"/>
-    <rect x="558" y="400" width="8" height="28" rx="2" fill="#4A3018"/>
-    <rect x="440" y="420" width="120" height="6" rx="2" fill="#4A3018"/>
-    <!-- Raccoon body -->
-    <rect x="452" y="326" width="96" height="66" rx="5" fill="#8A7E74"/>
-    <rect x="466" y="334" width="68" height="54" rx="4" fill="#9E9288"/>
-    <rect x="428" y="352" width="26" height="20" rx="3" fill="#8A7E74"/>
-    <rect x="418" y="360" width="22" height="18" rx="3" fill="#9A8878"/>
-    <rect x="546" y="352" width="26" height="20" rx="3" fill="#8A7E74"/>
-    <rect x="554" y="360" width="22" height="18" rx="3" fill="#9A8878"/>
-    <rect x="472" y="313" width="56" height="18" rx="3" fill="#9A8878"/>
-    <rect x="462" y="320" width="76" height="10" rx="2" fill="#8B5A2B"/>
-    <rect x="488" y="326" width="24" height="14" rx="2" fill="#C8901C"/>
-    <!-- Raccoon head -->
-    <rect x="452" y="244" width="96" height="74" rx="9" fill="#9A8878"/>
-    <rect x="452" y="230" width="24" height="22" rx="2" fill="#6A5848"/>
-    <rect x="456" y="234" width="16" height="16" rx="1" fill="#9A8878"/>
-    <rect x="458" y="236" width="12" height="12" rx="1" fill="#D4A498"/>
-    <rect x="524" y="226" width="24" height="22" rx="2" fill="#6A5848"/>
-    <rect x="527" y="230" width="16" height="16" rx="1" fill="#9A8878"/>
-    <rect x="529" y="232" width="12" height="12" rx="1" fill="#D4A498"/>
-    <rect x="452" y="264" width="96" height="26" rx="3" fill="#221610"/>
-    <rect x="460" y="267" width="22" height="17" rx="2" fill="#F0EBE0"/>
-    <rect x="465" y="270" width="12" height="12" rx="2" fill="#1A1210"/>
-    <rect x="466" y="271" width="5" height="5" fill="#F0EBE0"/>
-    <rect x="518" y="267" width="22" height="17" rx="2" fill="#F0EBE0"/>
-    <rect x="523" y="270" width="12" height="12" rx="2" fill="#1A1210"/>
-    <rect x="524" y="271" width="5" height="5" fill="#F0EBE0"/>
-    <rect x="464" y="290" width="72" height="28" rx="4" fill="#C4BCB2"/>
-    <rect x="490" y="294" width="20" height="10" rx="2" fill="#2A1810"/>
-    <!-- Bookshelf -->
-    <rect x="832" y="196" width="130" height="196" rx="2" fill="#5A3A18"/>
-    <rect x="836" y="200" width="122" height="188" rx="1" fill="#3A2210"/>
-    <rect x="832" y="260" width="130" height="8" rx="1" fill="#5A3A18"/>
-    <rect x="832" y="324" width="130" height="8" rx="1" fill="#5A3A18"/>
-    <rect x="832" y="388" width="130" height="8" rx="1" fill="#5A3A18"/>
-    <rect x="840" y="212" width="14" height="46" rx="1" fill="#185FA5"/>
-    <rect x="857" y="216" width="12" height="42" rx="1" fill="#8B1A1A"/>
-    <rect x="872" y="208" width="16" height="50" rx="1" fill="#1A5C2A"/>
-    <rect x="891" y="214" width="12" height="44" rx="1" fill="#534AB7"/>
-    <rect x="906" y="212" width="14" height="46" rx="1" fill="#6A3A08"/>
-    <rect x="923" y="210" width="12" height="48" rx="1" fill="#4A4A4A"/>
-    <rect x="840" y="272" width="16" height="48" rx="1" fill="#C8601C"/>
-    <rect x="859" y="276" width="14" height="44" rx="1" fill="#185FA5"/>
-    <rect x="876" y="270" width="12" height="50" rx="1" fill="#3A2A14"/>
-    <rect x="891" y="274" width="16" height="46" rx="1" fill="#8B1A1A"/>
-    <rect x="910" y="272" width="12" height="48" rx="1" fill="#0F6E56"/>
-    <rect x="925" y="276" width="14" height="44" rx="1" fill="#534AB7"/>
-    <rect x="840" y="336" width="18" height="46" rx="1" fill="#1A5C2A"/>
-    <rect x="861" y="340" width="14" height="42" rx="1" fill="#8B5A2B"/>
-    <rect x="878" y="332" width="16" height="50" rx="1" fill="#185FA5"/>
-    <rect x="897" y="338" width="12" height="44" rx="1" fill="#8B1A1A"/>
-    <!-- Plant on bookshelf -->
-    <rect x="856" y="192" width="20" height="10" rx="2" fill="#6A3820"/>
-    <rect x="860" y="180" width="12" height="14" rx="2" fill="#2A6018"/>
-    <rect x="858" y="174" width="10" height="10" rx="4" fill="#3A8020"/>
-    <rect x="864" y="170" width="10" height="12" rx="4" fill="#4A9028"/>
-    <rect x="854" y="176" width="10" height="10" rx="4" fill="#2A6818"/>
-    <!-- Trash can (Easter egg) -->
-    <rect x="190" y="358" width="46" height="44" rx="2" fill="#4A3820"/>
-    <rect x="186" y="352" width="54" height="10" rx="2" fill="#5A4828"/>
-    <rect x="196" y="340" width="22" height="18" rx="1" fill="#F4EFE0" opacity=".8" transform="rotate(-15 207 349)"/>
-    <rect x="204" y="337" width="18" height="16" rx="1" fill="#ECE8D8" opacity=".7" transform="rotate(9 213 345)"/>
-    <!-- Tunnel entrance -->
-    <rect x="68" y="224" width="92" height="172" rx="46 46 0 0" fill="#18100A"/>
-    <rect x="74" y="230" width="80" height="162" rx="40 40 0 0" fill="#100A04"/>
-  </svg>
-</div>
+<!-- ── Dispatch console ── -->
+<section class="dispatch-section" aria-hidden="true">
+  <div class="dc-header">
+    <div class="dc-title">Bandit Assessment Dispatch</div>
+    <div class="dc-live">
+      <div class="dc-dot"></div>LIVE
+    </div>
+  </div>
+  <div class="dc-stats">
+    <span><span class="dc-stat-val">47</span> vendors assessed</span>
+    <span><span class="dc-stat-val" style="color:var(--red)">8</span> HIGH risk</span>
+    <span><span class="dc-stat-val" style="color:var(--amber)">15</span> MEDIUM</span>
+    <span><span class="dc-stat-val" style="color:var(--green)">24</span> LOW</span>
+    <span><span class="dc-stat-val">12</span> due for reassessment</span>
+  </div>
 
-<!-- ── Footer bar ────────────────────────────────────────────────── -->
+  <div class="dc-row">
+    <div class="dc-row-lbl" style="color:var(--red)">RISK</div>
+    <div class="dc-fade-l"></div>
+    <div class="dc-fade-r"></div>
+    <div class="dc-track">
+      <div class="dc-inner" style="animation:marquee-a 38s linear infinite">
+        <span class="dc-item"><span style="color:#4a3820">Salesforce</span>&nbsp;<span style="color:var(--amber)">MEDIUM 3.2</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Cyera</span>&nbsp;<span style="color:var(--red)">HIGH 2.2</span></span>
+        <span class="dc-item"><span style="color:#4a3820">HubSpot</span>&nbsp;<span style="color:var(--green)">LOW 4.1</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Okta</span>&nbsp;<span style="color:var(--red)">HIGH 2.4</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Slack</span>&nbsp;<span style="color:var(--amber)">MEDIUM 3.0</span></span>
+        <span class="dc-item"><span style="color:#4a3820">NetSuite</span>&nbsp;<span style="color:var(--amber)">MEDIUM 3.4</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Rippling</span>&nbsp;<span style="color:var(--green)">LOW 3.9</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Snyk</span>&nbsp;<span style="color:var(--red)">HIGH 2.1</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Salesforce</span>&nbsp;<span style="color:var(--amber)">MEDIUM 3.2</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Cyera</span>&nbsp;<span style="color:var(--red)">HIGH 2.2</span></span>
+        <span class="dc-item"><span style="color:#4a3820">HubSpot</span>&nbsp;<span style="color:var(--green)">LOW 4.1</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Okta</span>&nbsp;<span style="color:var(--red)">HIGH 2.4</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Slack</span>&nbsp;<span style="color:var(--amber)">MEDIUM 3.0</span></span>
+        <span class="dc-item"><span style="color:#4a3820">NetSuite</span>&nbsp;<span style="color:var(--amber)">MEDIUM 3.4</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Rippling</span>&nbsp;<span style="color:var(--green)">LOW 3.9</span></span>
+        <span class="dc-item"><span style="color:#4a3820">Snyk</span>&nbsp;<span style="color:var(--red)">HIGH 2.1</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dc-row">
+    <div class="dc-row-lbl" style="color:var(--amber)">FINDINGS</div>
+    <div class="dc-fade-l"></div>
+    <div class="dc-fade-r"></div>
+    <div class="dc-track">
+      <div class="dc-inner" style="animation:marquee-b 24s linear infinite">
+        <span class="dc-item" style="color:#4a3820">D5 ABSENT — breach notification missing from DPA</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D6 AI TRAINING RISK — no opt-out mechanism found</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D8 REQUIRES DPA — contract not yet provided</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">POLICY/CONTRACT CONFLICT — D5 unbacked by DPA</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D2 SUB-PROCESSOR LIST — 23 processors confirmed</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">ESCALATION — AI training risk, no written opt-out</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D5 ABSENT — breach notification missing from DPA</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D6 AI TRAINING RISK — no opt-out mechanism found</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D8 REQUIRES DPA — contract not yet provided</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">POLICY/CONTRACT CONFLICT — D5 unbacked by DPA</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">D2 SUB-PROCESSOR LIST — 23 processors confirmed</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#4a3820">ESCALATION — AI training risk, no written opt-out</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dc-row">
+    <div class="dc-row-lbl" style="color:var(--green)">DOCS</div>
+    <div class="dc-fade-l"></div>
+    <div class="dc-fade-r"></div>
+    <div class="dc-track">
+      <div class="dc-inner" style="animation:marquee-c 52s linear infinite">
+        <span class="dc-item" style="color:#2a3a20">DPA assessed</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">SOC 2 Type II</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">MSA reviewed</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">AI Policy</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">Sub-processor list</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">ISO 27001 cert</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">BAA required</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">FedRAMP ATO</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">HITRUST CSF</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">Model card</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">Pentest summary</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">DPA assessed</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">SOC 2 Type II</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">MSA reviewed</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">AI Policy</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">Sub-processor list</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">ISO 27001 cert</span>
+        <span style="color:#2a1a08;padding:0 4px">·</span>
+        <span class="dc-item" style="color:#2a3a20">Pentest summary</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="cta-section">
+  <h2>Every vendor has something to hide.</h2>
+  <p>Bandit finds it first. Free, open source, forever.</p>
+  <a href="https://github.com/conorrusso/bandit"
+     target="_blank" rel="noopener"
+     class="btn-primary" style="background:var(--amber);color:var(--ink)">
+    Get Started on GitHub ↗
+  </a>
+</section>
+
 <footer>
-  <div class="footer-name">🦝 BANDIT</div>
-  <nav class="footer-links" aria-label="Footer links">
-    <a href="#crew">The Crew</a>
-    <a href="#rubric">The Rubric</a>
-    <a href="#roadmap">Roadmap</a>
-    <a href="https://github.com/conorrusso/bandit/blob/main/core/scoring/RUBRIC.md" target="_blank" rel="noopener">RUBRIC.md</a>
-    <a href="https://github.com/conorrusso/bandit" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://github.com/conorrusso/bandit/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
-  </nav>
-  <div class="footer-gh">github.com/conorrusso/bandit</div>
+  <a href="https://github.com/conorrusso/bandit"
+     target="_blank" rel="noopener">GitHub</a>
+  <a href="https://github.com/conorrusso/bandit/blob/main/README.md"
+     target="_blank" rel="noopener">Docs</a>
+  <a href="https://github.com/conorrusso/bandit/blob/main/core/scoring/RUBRIC.md"
+     target="_blank" rel="noopener">Rubric</a>
+  <a href="#roadmap">Roadmap</a>
+  <a href="#crew">The Crew</a>
+  <div class="copy">
+    github.com/conorrusso/bandit &middot; MIT License &middot; Free forever
+  </div>
 </footer>
 
 </body>
