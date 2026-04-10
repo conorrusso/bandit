@@ -82,6 +82,139 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 
+def _run_single_assessment(
+    vendor_name: str,
+    use_drive: bool = False,
+    verbose: bool = False,
+) -> tuple:
+    """
+    Run a single assessment. Returns (result, report_path).
+    Used by both bandit assess and bandit workflow.
+    """
+    import datetime
+    import shutil
+    import tempfile
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY not set. "
+            "Set the environment variable to run assessments."
+        )
+
+    from core.llm.anthropic import AnthropicProvider
+    from core.agents.privacy_bandit import PrivacyBandit
+    from cli.terminal import assessment_progress
+
+    provider = AnthropicProvider(
+        model="claude-haiku-4-5-20251001",
+        api_key=api_key,
+    )
+
+    # Integration context from intake profile
+    from core.profiles.vendor_cache import VendorProfileCache as _VPC_SA
+    _profile = _VPC_SA().get(vendor_name)
+    integration_context = None
+    if _profile and _profile.intake_completed:
+        from core.profiles.intake import build_integration_context_paragraph
+        integration_context = build_integration_context_paragraph(_profile)
+
+    # Download Drive documents to temp dir if requested
+    docs_folder = None
+    _drive_tmp = None
+    if use_drive:
+        try:
+            from core.config import load_config as _lc_sa
+            _cfg_sa = _lc_sa() or {}
+            _drive_cfg_sa = _cfg_sa.get(
+                "integrations", {}
+            ).get("google_drive", {})
+            _folder_id_sa = _drive_cfg_sa.get("root_folder_id")
+            if _folder_id_sa:
+                from core.integrations.google_drive import (
+                    GoogleDriveClient as _GDC_SA
+                )
+                _drive_tmp = tempfile.mkdtemp(
+                    prefix="bandit_drive_"
+                )
+                _dc_sa = _GDC_SA()
+                _dc_sa.authenticate()
+                _local_paths = _dc_sa.download_vendor_documents(
+                    vendor_name=vendor_name,
+                    parent_folder_id=_folder_id_sa,
+                    temp_dir=_drive_tmp,
+                )
+                if _local_paths:
+                    docs_folder = _drive_tmp
+        except Exception:
+            pass
+
+    try:
+        with assessment_progress(verbose=verbose) as update:
+            bandit = PrivacyBandit(
+                provider=provider, on_progress=update
+            )
+            assessment = bandit.assess(
+                vendor_name,
+                docs_folder=docs_folder,
+                integration_context=integration_context,
+            )
+    finally:
+        if _drive_tmp:
+            shutil.rmtree(_drive_tmp, ignore_errors=True)
+
+    # Write HTML report
+    slug = _vendor_slug(vendor_name)
+    reports_dir = pathlib.Path("reports")
+    reports_dir.mkdir(exist_ok=True)
+    report_path = (
+        reports_dir
+        / f"{slug}-{datetime.date.today().isoformat()}.html"
+    )
+    from cli.report import write_html_report
+    write_html_report(report_path, assessment)
+
+    # Save report to Drive if requested
+    if use_drive:
+        try:
+            from core.config import load_config as _lc_sa2
+            _cfg_sa2 = _lc_sa2() or {}
+            _drive_cfg_sa2 = _cfg_sa2.get(
+                "integrations", {}
+            ).get("google_drive", {})
+            if (
+                _drive_cfg_sa2.get("auto_save_reports", True)
+                and _drive_cfg_sa2.get("root_folder_id")
+            ):
+                from core.integrations.google_drive import (
+                    GoogleDriveClient as _GDC_SA2
+                )
+                _dc_sa2 = _GDC_SA2()
+                _dc_sa2.authenticate()
+                _dc_sa2.save_report_to_drive(
+                    local_file_path=str(report_path),
+                    vendor_name=vendor_name,
+                    parent_folder_id=_drive_cfg_sa2[
+                        "root_folder_id"
+                    ],
+                )
+        except Exception:
+            pass
+
+    # Update assessment history
+    _save_history(
+        slug,
+        assessment.result.risk_tier,
+        assessment.result.weighted_average,
+    )
+    assessment.result.report_path = str(report_path)
+    _VPC_SA().update_assessment_history(
+        vendor_name, assessment.result
+    )
+
+    return assessment.result, report_path
+
+
 # ─────────────────────────────────────────────────────────────────────
 # CLI group
 # ─────────────────────────────────────────────────────────────────────

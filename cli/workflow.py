@@ -299,39 +299,10 @@ def workflow(drive, assess, vendor):
         )
 
         try:
-            # Import and run assessment
-            from core.agents.privacy_bandit import (
-                PrivacyBandit
-            )
-            from core.data.resolver import (
-                VendorDataResolver
-            )
-
-            resolver = VendorDataResolver(vendor_name)
-            resolved = resolver.resolve(
-                include_documents=drive
-            )
-
-            bandit = PrivacyBandit()
-            result = bandit.assess(
+            from cli.main import _run_single_assessment
+            result, report_path = _run_single_assessment(
                 vendor_name,
-                documents=resolved.documents if drive else [],
-                on_progress=None,
-            )
-
-            # Write report
-            from cli.report import generate_report
-            report_path = generate_report(
-                vendor_name, result
-            )
-
-            # Save to Drive
-            if drive:
-                resolver.save_report(report_path)
-
-            # Update assessment history
-            VendorProfileCache().update_assessment_history(
-                vendor_name, result
+                use_drive=drive,
             )
 
             tier = getattr(result, "risk_tier", "?")
