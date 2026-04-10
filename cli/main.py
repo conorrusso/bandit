@@ -25,6 +25,11 @@ import sys
 
 import click
 
+from core.data.resolver import (
+    VendorDataResolver,
+    get_all_vendor_resolvers,
+)
+
 _HISTORY_PATH = pathlib.Path.home() / ".bandit" / "vendor-history.json"
 
 
@@ -1670,6 +1675,219 @@ def notify_alias(ctx, vendor_name, send_all, as_json):
 def register_alias(ctx, fmt, out):
     """Export TPRM register (alias for dashboard register)."""
     ctx.invoke(register_export, fmt=fmt, out=out)
+
+
+@main.command("sync")
+@click.argument("vendor_name", required=False)
+@click.option("--json", "as_json", is_flag=True,
+    default=False, help="Output raw JSON")
+@click.option("--verbose", "-v", is_flag=True,
+    default=False)
+@click.option("--discover", is_flag=True,
+    default=False,
+    help="Scan Drive root folder and link subfolders "
+         "to matching vendor profiles")
+def sync(vendor_name, as_json, verbose, discover):
+    """
+    Sync vendor profiles and documents from Drive.
+
+    Pulls latest profiles from Drive, scans vendor
+    folders for new documents, updates local cache.
+    Runs without triggering a full assessment.
+
+    \b
+    Examples:
+      bandit sync                   # all vendors
+      bandit sync "Cyera"           # one vendor
+      bandit sync --json            # structured output
+      bandit sync --discover        # link Drive folders
+    """
+    import json as json_module
+    from rich.console import Console
+    console = Console()
+
+    if discover:
+        from core.config import BanditConfig
+        from core.integrations.google_drive import (
+            GoogleDriveClient
+        )
+        from core.profiles.vendor_cache import (
+            VendorProfileCache
+        )
+
+        config = BanditConfig()
+        cache = VendorProfileCache()
+
+        drive_cfg = (
+            config.get_profile()
+            .get("integrations", {})
+            .get("google_drive", {})
+        )
+        root_folder_id = drive_cfg.get("root_folder_id")
+
+        if not root_folder_id:
+            console.print(
+                "\n  [red]Drive not configured.[/red]"
+                " Run: bandit setup --drive\n"
+            )
+            return
+
+        try:
+            drive = GoogleDriveClient()
+            drive.authenticate()
+            folders = drive.list_vendor_folders(
+                root_folder_id
+            )
+        except Exception as e:
+            console.print(
+                f"\n  [red]Could not reach Drive: "
+                f"{e}[/red]\n"
+            )
+            return
+
+        console.print(
+            f"\n  [dim]Found {len(folders)} folders "
+            f"in Drive root[/dim]\n"
+        )
+
+        all_profiles = cache.list_all()
+
+        for folder in folders:
+            folder_name = folder["name"]
+            folder_id = folder["id"]
+
+            # Skip hidden files (e.g. .vendor-profiles.json)
+            if folder_name.startswith("."):
+                continue
+
+            # Find matching local profile
+            # 1. Exact match (case-insensitive)
+            match = next(
+                (p for p in all_profiles
+                 if p.vendor_name.lower()
+                 == folder_name.lower()),
+                None
+            )
+            # 2. Contains match if no exact match
+            if not match:
+                match = next(
+                    (p for p in all_profiles
+                     if folder_name.lower()
+                     in p.vendor_name.lower()
+                     or p.vendor_name.lower()
+                     in folder_name.lower()),
+                    None
+                )
+
+            if match:
+                if match.drive_folder_id:
+                    console.print(
+                        f"  [dim]·[/dim]  "
+                        f"[bold]{match.vendor_name}[/bold]"
+                        f"  [dim]already linked[/dim]"
+                    )
+                else:
+                    match.drive_folder_id = folder_id
+                    match.drive_folder_name = folder_name
+                    cache.save(match.vendor_name, match)
+                    console.print(
+                        f"  [green]✓[/green]  "
+                        f"[bold]{match.vendor_name}[/bold]"
+                        f"  [dim]linked to "
+                        f"{folder_name}[/dim]"
+                    )
+            else:
+                console.print(
+                    f"  [yellow]?[/yellow]  "
+                    f"[bold]{folder_name}[/bold]"
+                    f"  [dim]no local profile —[/dim]"
+                    f"  [dim]run: bandit vendor add "
+                    f'"{folder_name}"[/dim]'
+                )
+
+        console.print()
+
+        # After discovery, continue into normal sync below
+        # so profiles are immediately synced to Drive
+
+    if vendor_name:
+        resolvers = [VendorDataResolver(
+            vendor_name,
+            on_progress=(
+                lambda p: console.print(
+                    f"  [dim]{p['message']}[/dim]"
+                ) if verbose else None
+            )
+        )]
+    else:
+        resolvers = get_all_vendor_resolvers()
+
+    results = []
+
+    for resolver in resolvers:
+        result = resolver.resolve(include_documents=True)
+        synced = resolver.sync_profile_to_drive()
+
+        results.append({
+            "vendor": result.vendor_name,
+            "drive_available": result.drive_available,
+            "drive_folder_id": result.drive_folder_id,
+            "documents_found": len(result.documents),
+            "document_names": [
+                d.filename for d in result.documents
+            ],
+            "profile_synced": synced,
+            "errors": result.errors,
+        })
+
+    if as_json:
+        click.echo(json_module.dumps(results, indent=2))
+        return
+
+    console.print()
+    for r in results:
+        name = r["vendor"]
+        doc_count = r["documents_found"]
+        errors = r["errors"]
+
+        if r["drive_available"] and r["drive_folder_id"]:
+            icon = "[green]☁[/green]"
+            detail = f"{doc_count} docs from Drive"
+        elif r["drive_available"]:
+            icon = "[yellow]☁[/yellow]"
+            detail = "Drive configured — no folder linked"
+        else:
+            icon = "[dim]⊙[/dim]"
+            detail = f"{doc_count} docs (local only)"
+
+        console.print(
+            f"  {icon}  [bold]{name}[/bold]"
+            f"  [dim]{detail}[/dim]"
+        )
+
+        if verbose and r["document_names"]:
+            for doc in r["document_names"]:
+                console.print(
+                    f"     [dim]· {doc}[/dim]"
+                )
+
+        if errors:
+            for err in errors:
+                console.print(
+                    f"     [red]⚠ {err}[/red]"
+                )
+
+    total_docs = sum(r["documents_found"] for r in results)
+    drive_vendors = sum(
+        1 for r in results if r["drive_folder_id"]
+    )
+    console.print(
+        f"\n  [dim]"
+        f"{len(results)} vendors  ·  "
+        f"{drive_vendors} on Drive  ·  "
+        f"{total_docs} total documents"
+        f"[/dim]\n"
+    )
 
 
 if __name__ == "__main__":

@@ -14,10 +14,12 @@ from core.notifications.sender import (
 console = Console()
 
 
-@click.group()
-def dashboard():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def dashboard(ctx):
     """Portfolio dashboard and reporting commands."""
-    pass
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(dashboard_show)
 
 
 # ── bandit dashboard show ────────────────────────────────
