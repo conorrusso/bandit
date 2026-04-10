@@ -383,6 +383,31 @@ class VendorProfileCache:
             )
             return False
 
+    def delete(self, vendor_name: str) -> bool:
+        """
+        Remove a vendor profile from local cache.
+        Returns True if deleted, False if not found.
+        Drive folder is never touched.
+        """
+        data = self._load()
+
+        # Try exact slug first
+        slug = vendor_name.lower().strip()
+
+        if slug in data:
+            del data[slug]
+            self._write(data)
+            return True
+
+        # Try case-insensitive match on raw keys
+        for key in list(data.keys()):
+            if key.lower() == vendor_name.lower():
+                del data[key]
+                self._write(data)
+                return True
+
+        return False
+
     def _load(self) -> dict[str, Any]:
         if not self._path.exists():
             return {}

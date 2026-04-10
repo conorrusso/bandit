@@ -1725,6 +1725,8 @@ def sync(vendor_name, as_json, verbose):
 
     results = []
     suggestions = []   # Drive folders with no local profile
+    folders = []       # Populated in STEP 1; used in STEP 2B
+    drive = None       # GoogleDriveClient; set in STEP 1
 
     if drive_enabled and root_folder_id and not vendor_name:
 
@@ -1817,6 +1819,71 @@ def sync(vendor_name, as_json, verbose):
                 except Exception:
                     # Can't even search — skip quietly
                     pass
+
+        # ── STEP 2B: Remove stale vendors ─────────────
+        # A vendor with no Drive folder, no intake, and
+        # no assessment history is auto-removed.
+        # Vendors with real data are warned instead.
+        # Only runs if STEP 1 succeeded (folders truthy).
+        if drive_enabled and root_folder_id and folders:
+            all_profiles = cache.list_all()
+            drive_folder_names = {
+                f["name"].lower().strip()
+                for f in folders
+            }
+
+            deleted_any = False
+            for profile in all_profiles:
+                has_history = bool(
+                    profile.assessment_history
+                )
+                has_intake = profile.intake_completed
+
+                if has_history or has_intake:
+                    # Has real data — warn but don't remove
+                    if not profile.drive_folder_id:
+                        name_match = any(
+                            profile.vendor_name.lower().strip()
+                            in fname or fname in
+                            profile.vendor_name.lower().strip()
+                            for fname in drive_folder_names
+                        )
+                        if not name_match:
+                            console.print(
+                                f"  [yellow]⚠[/yellow]  "
+                                f"[bold]{profile.vendor_name}"
+                                f"[/bold]"
+                                f"  [dim]not found in Drive — "
+                                f"run bandit vendor offboard "
+                                f'"{profile.vendor_name}" '
+                                f"to remove[/dim]"
+                            )
+                    continue
+
+                # No real data — safe to auto-remove
+                if not profile.drive_folder_id:
+                    name_match = any(
+                        profile.vendor_name.lower().strip()
+                        in fname or fname in
+                        profile.vendor_name.lower().strip()
+                        for fname in drive_folder_names
+                    )
+                    if not name_match:
+                        cache.delete(profile.vendor_name)
+                        deleted_any = True
+                        console.print(
+                            f"  [dim]removed  "
+                            f"{profile.vendor_name} "
+                            f"(not in Drive)[/dim]"
+                        )
+
+            # Push deletions to Drive immediately so
+            # STEP 3's sync_from_drive doesn't pull
+            # deleted profiles back from Drive cache
+            if deleted_any and drive is not None:
+                cache.sync_to_drive(
+                    drive, root_folder_id
+                )
 
     # ── STEP 3: Sync all vendors ───────────────────
     console.print()
