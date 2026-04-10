@@ -1,7 +1,6 @@
 # Document Sources Guide
 
-Bandit v1.0 assessed public privacy policies only.
-Bandit v1.1 adds support for uploading vendor documents — DPAs, MSAs, SOC 2 reports, BAAs, AI policies, and more.
+Bandit supports public privacy policies and vendor documents — DPAs, MSAs, SOC 2 reports, BAAs, AI policies, and more.
 
 This unlocks full scoring across all 8 dimensions.
 
@@ -98,7 +97,7 @@ Format    Extension    Notes
 ──────────────────────────────────────────────────────────
 PDF       .pdf         Most compliance docs. Must have
                        text layer — scanned PDFs cannot
-                       be read (OCR coming in v1.2)
+                       be read (OCR not yet supported)
 Word      .docx .doc   Many DPAs come as Word docs.
                        Tables extracted (DPA checklists)
 HTML      .html .htm   Privacy policies, web pages
@@ -250,7 +249,7 @@ Bandit detects this and shows:
 
 To fix: ask your vendor for a native PDF version (not a scan). Most vendors have text-based versions of their compliance documents.
 
-OCR support for scanned PDFs is planned for v1.2.
+OCR support for scanned PDFs is not yet available — request a native PDF from your vendor.
 
 ---
 

@@ -13,7 +13,26 @@ from __future__ import annotations
 
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
+
+# ── SSRF protection ───────────────────────────────────────────────────────────
+_BLOCKED_HOSTS = {"localhost", "0.0.0.0", "169.254.169.254"}
+_BLOCKED_PREFIXES = ("127.", "10.", "192.168.", "172.")
+
+
+def _is_safe_url(url: str) -> bool:
+    """Return False for loopback, private-range, or cloud-metadata hosts."""
+    try:
+        host = urllib.parse.urlparse(url).hostname or ""
+        host = host.lower()
+        if host in _BLOCKED_HOSTS:
+            return False
+        if any(host.startswith(p) for p in _BLOCKED_PREFIXES):
+            return False
+        return True
+    except Exception:
+        return False
 
 _TIMEOUT = 25  # seconds
 _MAX_BYTES = 800_000  # ~800 KB — enough for any privacy policy
@@ -67,6 +86,8 @@ def _text_length(html: str) -> int:
 
 
 def _fetch_direct(url: str) -> str:
+    if not _is_safe_url(url):
+        raise ValueError(f"Blocked: {url!r} resolves to a private or restricted address")
     req = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
         raw = resp.read(_MAX_BYTES)

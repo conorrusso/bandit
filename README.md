@@ -98,6 +98,12 @@ bandit vendor list               List all vendors with risk tier and next due da
 bandit vendor list --due         Vendors due for reassessment only
 bandit vendor list --risk HIGH   Filter by risk tier
 bandit legal <vendor>            Standalone contract gap analysis
+bandit dashboard                 Portfolio risk overview
+bandit schedule                  Reassessment schedule
+bandit schedule --due            Vendors due for reassessment
+bandit register                  Export TPRM register (CSV / JSON / HTML)
+bandit notify --all              Send all queued IT notifications
+bandit sync                      Sync with Drive — discovers, links, pulls docs
 ```
 
 ### Input formats
@@ -304,8 +310,7 @@ bandit batch vendors.txt --drive
 
 ```bash
 bandit setup --drive           # configure credentials
-bandit sync --discover         # link existing folders to vendor profiles
-bandit sync                    # pull docs + profiles
+bandit sync                    # discover, link, and pull docs
 bandit assess "Vendor" --drive # run with Drive docs
 bandit dashboard               # view portfolio
 ```
@@ -433,8 +438,8 @@ Legal Bandit · Full GDPR Art. 28(3) DPA checklist · MSA commercial data protec
 ### v1.3 — Live
 Vendor Intelligence · 12-question intake wizard · Tech stack integration · Assessment history per vendor · Intake context injected into assessments · Weight modifiers from intake data · IT notification queue · Google Drive profile sync
 
-### v1.4 — Planned
-Dashboard · Scheduled reassessment · IT notification sending · Portfolio risk register · Policy change monitoring
+### v1.4 — Live
+Portfolio dashboard · Reassessment schedule · TPRM register export (CSV / JSON / HTML) · IT notification sending · Unified data resolver
 
 ### v2.0 — Planned
 Full vendor onboarding workflow · Submission portal · Approval workflow · Vendor self-service · API

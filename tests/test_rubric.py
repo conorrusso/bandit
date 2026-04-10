@@ -111,6 +111,82 @@ class TestRedFlags:
         assert ceilings["D1"] == 1
 
 
+class TestD8Exclusion:
+    def test_d8_excluded_in_public_policy_scope(self):
+        """D8 must be excluded from weighted average when scope=public_policy_only."""
+        ev = {dim: _full_evidence(dim, 3) for dim in RUBRIC}
+        result = score_vendor(
+            "PolicyOnly",
+            ev,
+            assessment_scope="public_policy_only",
+        )
+        assert result.dimensions["D8"].is_excluded is True
+
+    def test_d8_excluded_from_weighted_average(self):
+        """
+        When D8 is excluded, weighted average is calculated over 7 dimensions only.
+        Give D1-D7 level 5 — average must be LOW even if D8 would score 1.
+        """
+        ev = {dim: _full_evidence(dim, 5) for dim in RUBRIC}
+        ev["D8"] = _empty_evidence("D8")
+        result = score_vendor(
+            "PartialVendor",
+            ev,
+            assessment_scope="public_policy_only",
+        )
+        # D8 excluded → full score on 7 dims drives average to LOW
+        assert result.risk_tier == "LOW"
+
+    def test_d8_included_when_dpa_available(self):
+        """D8 is NOT excluded when dpa_available=True and scope includes documents."""
+        ev = {dim: _full_evidence(dim, 3) for dim in RUBRIC}
+        result = score_vendor(
+            "DPAVendor",
+            ev,
+            assessment_scope="full",
+            dpa_available=True,
+        )
+        assert result.dimensions["D8"].is_excluded is False
+
+
+class TestRedFlagCapScore:
+    def test_red_flag_caps_score_below_raw(self):
+        """Red-flag phrase 'appropriate measures' caps security-related dimensions."""
+        ev = {dim: _full_evidence(dim, 5) for dim in RUBRIC}
+        result = score_vendor(
+            "VagueCo",
+            ev,
+            extracted_text=(
+                "We apply appropriate measures to protect your data."
+            ),
+            assessment_scope="full",
+            dpa_available=True,
+        )
+        # The "appropriate measures" phrase triggers a ceiling
+        at_least_one_capped = any(
+            d.capped_score < 5
+            for d in result.dimensions.values()
+            if not d.is_excluded
+        )
+        assert at_least_one_capped, "Red flag 'appropriate measures' should cap at least one dimension"
+
+    def test_no_red_flags_on_clean_text_no_cap(self):
+        """Clean policy text produces no ceilings — all dims at full score."""
+        ev = {dim: _full_evidence(dim, 5) for dim in RUBRIC}
+        result = score_vendor(
+            "CleanCo",
+            ev,
+            extracted_text="We protect your data and respond to requests within 30 days.",
+            assessment_scope="full",
+            dpa_available=True,
+        )
+        assert all(
+            d.capped_score == 5
+            for d in result.dimensions.values()
+            if not d.is_excluded
+        )
+
+
 class TestScoreVendor:
     def _good_evidence(self) -> dict[str, dict]:
         """Evidence that should produce a mid-range score across all dims."""

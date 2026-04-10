@@ -217,7 +217,11 @@ class PrivacyBandit(BaseBandit):
         self._fetched_pages = {}
         self._fetch_meta = []
 
-        vendor = vendor.strip()
+        import re as _re
+        vendor = vendor.strip()[:200]
+        vendor = _re.sub(r"[^\w\s\-\.\(\)/:]", "", vendor).strip()
+        if not vendor:
+            raise ValueError("Vendor name is empty after sanitisation.")
 
         # ── Input type detection ──────────────────────────────────────
         input_type = self._detect_input_type(vendor)

@@ -5,6 +5,7 @@ from typing import Optional
 import json
 import logging
 import smtplib
+import urllib.parse
 import urllib.request
 import urllib.error
 from email.mime.text import MIMEText
@@ -101,11 +102,28 @@ def _build_slack_payload(
     }
 
 
+def _is_safe_url(url: str) -> bool:
+    """Block private/loopback hosts — SSRF guard for webhook URLs."""
+    _blocked_hosts = {"localhost", "0.0.0.0", "169.254.169.254"}
+    _blocked_prefixes = ("127.", "10.", "192.168.", "172.")
+    try:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+        if host in _blocked_hosts:
+            return False
+        if any(host.startswith(p) for p in _blocked_prefixes):
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def _send_slack(
     webhook_url: str,
     payload: dict,
 ) -> None:
     """Send Slack webhook. Raises on failure."""
+    if not _is_safe_url(webhook_url):
+        raise ValueError(f"Blocked webhook URL: {webhook_url!r}")
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         webhook_url,

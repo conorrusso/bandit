@@ -100,3 +100,17 @@ class TestAssessmentHistory:
         # Should not raise — should return None gracefully
         assert cache.get("Anything") is None
         assert cache.list_all() == []
+
+
+class TestDeleteVendor:
+    @pytest.mark.skip(
+        reason="VendorProfileCache has no delete() method. "
+               "Deletion is not implemented in v1.4 — tracked for v1.5."
+    )
+    def test_delete_vendor(self, tmp_path):
+        """Save vendor → delete → get returns None."""
+        cache = _make_cache(tmp_path)
+        cache.save("ToDelete", _minimal_profile("ToDelete"))
+        assert cache.get("ToDelete") is not None
+        cache.delete("ToDelete")  # method does not exist yet
+        assert cache.get("ToDelete") is None

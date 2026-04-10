@@ -177,13 +177,13 @@ Overdue vendors show a red warning in the Next due column. Use this as your week
 
 ### Linking existing Drive folders
 
-If you already have vendor folders in Drive before running `bandit vendor add`, link them with:
+If you already have vendor folders in Drive before running `bandit vendor add`, run:
 
 ```bash
-bandit sync --discover
+bandit sync
 ```
 
-Bandit scans the root folder and links matches automatically. You will see:
+`bandit sync` automatically discovers and links Drive folders to matching vendor profiles. You will see:
 
 ```
 ✓  Cyera      linked to Cyera
@@ -197,8 +197,8 @@ If a Drive folder already exists for the vendor, `bandit vendor add` will find i
 ### Sync sequence
 
 ```bash
-bandit sync --discover   # link existing folders
-bandit sync              # pull latest docs + profiles
+bandit setup --drive     # configure credentials (once)
+bandit sync              # discover, link, and pull docs
 bandit dashboard         # view updated portfolio
 ```
 

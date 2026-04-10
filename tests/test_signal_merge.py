@@ -85,3 +85,59 @@ class TestSignalMergeRule:
                 all_doc_signals[key] = value
         assert all_doc_signals["d1_purposes_stated"] is True
         assert all_doc_signals["d5_breach_notification_timeline_stated"] is True
+
+    def test_document_signal_never_downgrades(self):
+        """Alias for test_policy_true_not_overwritten_by_doc_false — explicit name per spec."""
+        policy = {"d1_purposes_stated": True}
+        docs = {"d1_purposes_stated": False}
+        merged = self._apply_merge(policy, docs)
+        assert merged["d1_purposes_stated"] is True
+
+    def test_document_supplements_policy(self):
+        """Document adds a True signal the policy didn't have; policy signals intact."""
+        policy = {"d1_purposes_stated": True}
+        docs = {
+            "d1_purposes_stated": False,        # should NOT overwrite
+            "d1_data_minimization_stated": True,  # new True — should be added
+        }
+        merged = self._apply_merge(policy, docs)
+        assert merged["d1_purposes_stated"] is True
+        assert merged.get("d1_data_minimization_stated") is True
+
+
+class TestDpaCharCountThreshold:
+    """DPA text below 5000 chars is treated as insufficient for D8 scoring.
+
+    The threshold is implemented in the privacy_bandit assessment pipeline
+    (not in rubric.py directly), so these tests verify the scoring outcome
+    via score_vendor's dpa_available flag — which is set to False when the
+    DPA text is below threshold.
+    """
+
+    def test_dpa_below_threshold_excludes_d8(self):
+        """When dpa_available=False, D8 is excluded regardless of evidence."""
+        from core.scoring.rubric import score_vendor, RUBRIC
+        ev = {dim: {s: True for lvl in RUBRIC[dim]["levels"].values()
+                    for s in lvl["required_signals"]}
+              for dim in RUBRIC}
+        result = score_vendor(
+            "ShortDPACo",
+            ev,
+            assessment_scope="documents",
+            dpa_available=False,
+        )
+        assert result.dimensions["D8"].is_excluded is True
+
+    def test_dpa_above_threshold_includes_d8(self):
+        """When dpa_available=True, D8 is included in scoring."""
+        from core.scoring.rubric import score_vendor, RUBRIC
+        ev = {dim: {s: True for lvl in RUBRIC[dim]["levels"].values()
+                    for s in lvl["required_signals"]}
+              for dim in RUBRIC}
+        result = score_vendor(
+            "FullDPACo",
+            ev,
+            assessment_scope="full",
+            dpa_available=True,
+        )
+        assert result.dimensions["D8"].is_excluded is False
