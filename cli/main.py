@@ -1840,6 +1840,33 @@ def sync(vendor_name, as_json, verbose, discover):
             "errors": result.errors,
         })
 
+    # Check whether stored Drive folder IDs still exist
+    for resolver in resolvers:
+        profile = resolver.profile
+        if not profile:
+            continue
+
+        folder_id = getattr(
+            profile, "drive_folder_id", None
+        )
+        if not folder_id:
+            continue
+
+        if resolver._drive_configured and resolver._drive:
+            try:
+                resolver._drive.list_files_in_folder(
+                    folder_id
+                )
+            except Exception:
+                console.print(
+                    f"  [yellow]⚠[/yellow]  "
+                    f"[bold]{profile.vendor_name}[/bold]"
+                    f"  [dim]Drive folder not found — "
+                    f"may have been deleted or moved. "
+                    f"Run bandit sync --discover to "
+                    f"relink.[/dim]"
+                )
+
     if as_json:
         click.echo(json_module.dumps(results, indent=2))
         return
