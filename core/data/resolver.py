@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 import logging
+import tempfile
 
 from core.profiles.vendor_cache import VendorProfileCache
 from core.config import BanditConfig
@@ -261,7 +262,7 @@ class VendorDataResolver:
         )
 
         try:
-            files = self._drive.list_files_in_folder(
+            files = self._drive.list_vendor_files(
                 self.drive_folder_id
             )
             for f in files:
@@ -269,9 +270,11 @@ class VendorDataResolver:
                 if "privacy-assessment" in f["name"]:
                     continue
                 try:
-                    content = self._drive.download_file(
-                        f["id"]
-                    )
+                    with tempfile.TemporaryDirectory() as tmp:
+                        local_path = self._drive.download_file(
+                            f["id"], f["name"], tmp
+                        )
+                        content = Path(local_path).read_bytes()
                     docs.append(ResolvedDocument(
                         filename=f["name"],
                         content=content,

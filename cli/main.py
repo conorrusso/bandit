@@ -1782,7 +1782,7 @@ def sync(vendor_name, as_json, verbose):
             if not profile.drive_folder_id:
                 continue
             try:
-                drive.list_files_in_folder(
+                drive.list_vendor_files(
                     profile.drive_folder_id
                 )
                 # Folder exists — nothing to do
