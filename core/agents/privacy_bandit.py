@@ -285,6 +285,20 @@ class PrivacyBandit(BaseBandit):
                 ]
                 documents_assessed = [d.file_name for d in ready_docs]
 
+                # If a Privacy Policy PDF is in Drive docs, use its text
+                # instead of the JS-rendered web fetch — more reliable
+                _policy_doc = next(
+                    (d for d in ready_docs
+                     if d.doc_type == DocumentType.PRIVACY_POLICY
+                     and len(d.text) > 2000),
+                    None
+                )
+                if _policy_doc:
+                    policy_text = _policy_doc.text
+                    self._progress(
+                        f"Phase 1/3  Using Drive PDF for policy signals: "
+                        f"{_policy_doc.file_name}"
+                    )
 
                 for doc in ready_docs:
                     self._progress(
@@ -356,6 +370,34 @@ class PrivacyBandit(BaseBandit):
                 for k, v in d8_translated.items():
                     if k not in _sigs or (v and not _sigs.get(k)):
                         _sigs[k] = v
+
+            # Translate d8_art28_assistance_dsars → D3 signal so DPA
+            # DSAR assistance commitment registers in D3 scoring
+            if all_doc_signals.get("d8_art28_assistance_dsars"):
+                _sigs = raw_json.setdefault("signals", {})
+                _sigs.setdefault("d3_dsar_procedure_documented", True)
+                _sigs.setdefault("d3_some_rights_listed", True)
+
+            # Build framework_certifications from successfully extracted
+            # certification documents. The policy extraction prompt only
+            # sees the web page — it cannot detect certs from PDFs.
+            _doc_types = {d.doc_type for d in ready_docs if d.extraction_ok}
+            _fw_certs = raw_json.setdefault("framework_certifications", {})
+
+            if DocumentType.SOC2_TYPE2 in _doc_types:
+                if all_doc_signals.get("privacy_tsc_included"):
+                    _fw_certs.setdefault("soc2_type2_privacy_tsc", True)
+                else:
+                    _fw_certs.setdefault("soc2_type2_security_only", True)
+
+            if DocumentType.ISO27001 in _doc_types:
+                _fw_certs.setdefault("iso_27001_only", True)
+                # ISO 27701 extension detected inside the ISO 27001 cert
+                if all_doc_signals.get("iso27701_extension"):
+                    _fw_certs.setdefault("iso_27701_certified", True)
+
+            if DocumentType.ISO27701 in _doc_types:
+                _fw_certs.setdefault("iso_27701_certified", True)
 
         # ── Evidence confidence ───────────────────────────────────────
         evidence_confidence = self._calculate_evidence_confidence(

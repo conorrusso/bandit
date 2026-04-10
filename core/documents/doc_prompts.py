@@ -60,6 +60,8 @@ Extract these signals from the DPA:
   "d8_art28_audit_rights": <true if audit/inspection rights present>,
   "d8_art28_deletion_return": <true if deletion/return obligation present>,
   "d8_art28_assistance_dsars": <true if DSAR assistance committed>,
+  "d3_dsar_procedure_documented": <true if DPA includes a process for handling data subject requests>,
+  "d3_some_rights_listed": <true if data subject rights (access, deletion, etc.) are mentioned or committed to>,
   "d8_art28_assistance_security": <true if security assistance committed>,
   "d8_art28_assistance_breach": <true if breach notification assistance committed>,
   "d8_art28_assistance_dpia": <true if DPIA assistance committed>,
