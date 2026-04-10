@@ -330,9 +330,6 @@ def workflow(drive, assess, vendor):
                 resolver.save_report(report_path)
 
             # Update assessment history
-            from core.profiles.vendor_cache import (
-                VendorProfileCache
-            )
             VendorProfileCache().update_assessment_history(
                 vendor_name, result
             )
