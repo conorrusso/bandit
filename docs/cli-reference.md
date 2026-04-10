@@ -598,6 +598,32 @@ Sync runs automatically at the start and end of every `bandit assess --drive` ru
 
 ---
 
+## bandit workflow
+
+Vendor onboarding workflow. Finds all vendors with incomplete intake, walks through the 12-question profile for each one, then offers to batch assess.
+
+Works for two scenarios:
+
+NEW VENDOR PROCUREMENT
+Run before you sign. Intake captures what data they will access. Assessment generates a Legal Bandit redline brief you can use in contract negotiations.
+
+EXISTING VENDORS
+Catches up vendors added via bandit sync that don't have intake data yet.
+
+Options:
+  --drive           Use Drive documents when assessing
+  --no-assess       Run intake only, skip assessments
+  --vendor NAME     Run for a single vendor only
+
+Examples:
+```bash
+bandit workflow --drive
+bandit workflow --vendor "Cloudflare" --drive
+bandit workflow --no-assess
+```
+
+---
+
 ## bandit dashboard
 
 Portfolio risk overview across all vendors.

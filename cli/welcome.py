@@ -77,6 +77,8 @@ def show_welcome(console: Console | None = None) -> None:
         (_cmd("bandit register", ""),                               "Export TPRM register (CSV / JSON / HTML)"),
         (_cmd("bandit notify",  "", "--all"),                       "Send queued IT notifications"),
         (_cmd("bandit sync",    ""),                                "Sync with Drive — discovers, links, detects deletions, pulls documents"),
+        (_cmd("bandit workflow", ""),                               "Onboard vendors — intake + assess"),
+        (_cmd("bandit workflow", "", "--drive"),                    "With Drive documents"),
     ]
     for cmd_text, desc in commands:
         cmd_table.add_row(cmd_text, desc)
@@ -124,25 +126,21 @@ def show_welcome(console: Console | None = None) -> None:
 
     _wf_heading("First time with Google Drive:")
     _wf_step("1.", "bandit setup --drive")
-    _wf_step("2.", "bandit sync",      "discovers, links, pulls docs")
-    _wf_step("3.", "bandit dashboard", "view portfolio")
+    _wf_step("2.", "bandit sync",             "auto-creates profiles")
+    _wf_step("3.", "bandit workflow --drive", "intake + assess all")
+    _wf_step("4.", "bandit dashboard")
     wf_lines.append("\n")
 
-    _wf_heading("Add a new vendor:")
+    _wf_heading("New vendor during procurement:")
     _wf_step("1.", 'bandit vendor add "VendorName"')
-    _wf_step("2.", 'bandit assess "VendorName" --drive')
+    _wf_step("2.", 'bandit workflow --vendor "VendorName" --drive',
+             "generates redline brief before you sign")
     wf_lines.append("\n")
 
-    _wf_heading("Run a full assessment:")
-    _wf_step("  ", 'bandit assess "VendorName" --drive --verbose')
-    wf_lines.append("\n")
-
-    _wf_heading("See what needs reassessment:")
-    _wf_step("  ", "bandit schedule --due")
-    wf_lines.append("\n")
-
-    _wf_heading("Export vendor register:")
-    _wf_step("  ", "bandit register --format html")
+    _wf_heading("Regular use:")
+    _wf_step("  ", "bandit sync",      "keep Drive in sync")
+    _wf_step("  ", "bandit dashboard", "portfolio overview")
+    _wf_step("  ", "bandit schedule --due", "what needs reassessment")
 
     console.print(Panel(
         wf_lines,

@@ -8,28 +8,24 @@ Once connected, run `bandit assess "Salesforce" --drive` and Bandit finds, downl
 
 ## Setup sequence
 
-If you are setting up Drive for the first time with existing vendor folders:
-
+First time:
 ```bash
-# 1. Configure Drive credentials
-bandit setup --drive
-
-# 2. Discover, link, and sync everything
-#    Scans your Bandit root folder, links subfolders that match
-#    vendor profiles, detects deleted folders, pulls documents.
-bandit sync
-
-# 3. Verify everything is connected
-bandit dashboard
+bandit setup --drive     # configure credentials
+bandit sync              # discovers folders, auto-creates profiles
+bandit workflow --drive  # intake + assess all
+bandit dashboard         # view portfolio
 ```
 
-If a Drive folder has no local profile yet:
-
+Adding a new vendor:
 ```bash
-bandit vendor add "VendorName"
-```
+# Option A — vendor already has a Drive folder:
+bandit sync              # auto-discovers it
+bandit workflow --vendor "VendorName" --drive
 
-Bandit will find and link the existing folder automatically during intake.
+# Option B — new vendor, no Drive folder yet:
+bandit vendor add "VendorName"  # creates folder
+bandit workflow --vendor "VendorName" --drive
+```
 
 ---
 

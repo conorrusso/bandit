@@ -1627,6 +1627,10 @@ from cli.dashboard import dashboard  # noqa: E402
 from cli.dashboard import schedule_show, notify_send, register_export  # noqa: E402
 main.add_command(dashboard)
 
+# ── v1.4: Workflow command ────────────────────────────────
+from cli.workflow import workflow  # noqa: E402
+main.add_command(workflow)
+
 
 # ── v1.4: Top-level aliases ──────────────────────────────
 
@@ -1893,19 +1897,78 @@ def sync(vendor_name, as_json, verbose):
         f"[/dim]"
     )
 
-    # Suggestions for unmatched Drive folders
+    # Auto-create minimal profiles for unmatched Drive folders
     if suggestions:
         console.print()
         console.print(
-            "  [dim]Drive folders with no local "
-            "profile:[/dim]"
+            "  [dim]Creating minimal profiles for "
+            "new Drive folders...[/dim]"
         )
-        for s in suggestions:
-            console.print(
-                f"  [yellow]?[/yellow]  {s}"
-                f"  [dim]→ bandit vendor add "
-                f'"{s}"[/dim]'
+
+        for folder_name in suggestions:
+            # Find the folder_id from the folders list
+            folder_id = next(
+                (f["id"] for f in folders
+                 if f["name"] == folder_name),
+                None
             )
+
+            try:
+                from core.profiles.auto_detect import (
+                    VendorAutoDetector
+                )
+                detector = VendorAutoDetector()
+                detect_result = detector.detect(folder_name)
+
+                # Build minimal profile
+                from core.profiles.vendor_cache import (
+                    VendorProfile
+                )
+                from datetime import datetime
+
+                profile = VendorProfile(
+                    vendor_name=folder_name,
+                    vendor_slug=folder_name.lower()
+                        .strip()
+                        .replace(" ", "-")
+                        .replace("(", "")
+                        .replace(")", ""),
+                    functions=getattr(
+                        detect_result, "functions", []
+                    ) if detect_result else [],
+                    detection_method="drive_discovery",
+                    vendor_country=None,
+                    phi_processor=False,
+                    pci_processor=False,
+                    children_data=False,
+                    last_updated=datetime.now()
+                        .strftime("%Y-%m-%d"),
+                    drive_folder_id=folder_id,
+                    drive_folder_name=folder_name,
+                    intake_completed=False,
+                )
+
+                cache.save(folder_name, profile)
+
+                console.print(
+                    f"  [green]✓[/green]  "
+                    f"[bold]{folder_name}[/bold]"
+                    f"  [dim]added — run "
+                    f"bandit workflow to complete "
+                    f"intake and assess[/dim]"
+                )
+
+            except Exception as e:
+                console.print(
+                    f"  [yellow]?[/yellow]  "
+                    f"[bold]{folder_name}[/bold]"
+                    f"  [dim]could not auto-create: "
+                    f"{e}[/dim]"
+                )
+
+        # Refresh resolvers to include newly created profiles
+        if not vendor_name:
+            resolvers = get_all_vendor_resolvers()
 
     console.print()
 

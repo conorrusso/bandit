@@ -30,6 +30,34 @@ bandit vendor show "Salesforce"
 
 ---
 
+## Batch onboarding with bandit workflow
+
+When you have multiple vendors to onboard at once:
+
+```bash
+bandit sync              # auto-creates profiles
+bandit workflow --drive  # intake + assess all
+```
+
+For a single new vendor during procurement:
+
+```bash
+bandit vendor add "VendorName"
+bandit workflow --vendor "VendorName" --drive
+```
+
+The workflow:
+1. Shows all vendors missing intake data
+2. Asks if you want to proceed
+3. Walks through 12 questions per vendor
+4. Lets you skip any vendor
+5. Offers to assess all completed vendors at once
+6. Shows risk tiers and saves reports to Drive
+
+The Legal Bandit redline brief is generated automatically when Drive documents include a DPA or MSA. Use it as a negotiating tool before signing.
+
+---
+
 ## bandit vendor add
 
 Runs the 12-question intake wizard. Takes about 3 minutes.
