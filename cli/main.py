@@ -2026,6 +2026,208 @@ def register_alias(ctx, fmt, out):
     ctx.invoke(register_export, fmt=fmt, out=out)
 
 
+# ── v1.5: AI Bandit standalone ───────────────────────────
+
+@main.command("ai")
+@click.argument("vendor_name")
+@click.option("--docs", type=click.Path(exists=True, file_okay=False), default=None, metavar="PATH",
+    help="Path to folder containing vendor documents")
+@click.option("--drive", is_flag=True, default=False, help="Fetch vendor documents from Google Drive")
+@click.option("-v", "--verbose", is_flag=True, help="Show detail")
+def ai_assess(vendor_name, docs, drive, verbose):
+    """Run AI Bandit standalone — deep D6 analysis of AI/ML practices.
+
+    Requires AI policy, model card, or DPA with AI clauses.
+
+    \b
+    Examples:
+      bandit ai "OpenAI" --drive
+      bandit ai "Vendor" --docs ./vendor-docs/
+    """
+    from cli.terminal import console
+    _run_agent_standalone(
+        agent_type="ai",
+        vendor_name=vendor_name,
+        docs=docs,
+        drive=drive,
+        verbose=verbose,
+        console=console,
+    )
+
+
+# ── v1.5: Audit Bandit standalone ────────────────────────
+
+@main.command("audit")
+@click.argument("vendor_name")
+@click.option("--docs", type=click.Path(exists=True, file_okay=False), default=None, metavar="PATH",
+    help="Path to folder containing vendor documents")
+@click.option("--drive", is_flag=True, default=False, help="Fetch vendor documents from Google Drive")
+@click.option("-v", "--verbose", is_flag=True, help="Show detail")
+def audit_assess(vendor_name, docs, drive, verbose):
+    """Run Audit Bandit standalone — SOC 2 and ISO gap analysis.
+
+    Requires SOC 2 report or ISO certificate.
+
+    \b
+    Examples:
+      bandit audit "Google Cloud" --drive
+      bandit audit "Vendor" --docs ./vendor-docs/
+    """
+    from cli.terminal import console
+    _run_agent_standalone(
+        agent_type="audit",
+        vendor_name=vendor_name,
+        docs=docs,
+        drive=drive,
+        verbose=verbose,
+        console=console,
+    )
+
+
+def _run_agent_standalone(
+    agent_type: str,
+    vendor_name: str,
+    docs: str | None,
+    drive: bool,
+    verbose: bool,
+    console,
+) -> None:
+    """Shared logic for standalone agent commands."""
+    import shutil
+    import tempfile
+
+    from core.config import BanditConfig
+    from core.llm.factory import load_provider
+    from core.agents.agent_base import AgentDocument
+
+    cfg = BanditConfig().get_provider_config()
+    try:
+        provider = load_provider(cfg)
+    except RuntimeError as exc:
+        console.print(f"[bold red]Error:[/] {exc}")
+        return
+
+    # Resolve docs
+    docs_folder = docs
+    _drive_tmp = None
+    if drive and not docs_folder:
+        try:
+            from core.config import load_config
+            from core.integrations.google_drive import GoogleDriveClient
+            _cfg = load_config() or {}
+            _drive_cfg = _cfg.get("integrations", {}).get("google_drive", {})
+            _folder_id = _drive_cfg.get("root_folder_id")
+            if not _folder_id:
+                console.print("  [color(196)]✗[/]  Google Drive not configured.")
+                return
+            _drive_tmp = tempfile.mkdtemp(prefix="bandit_agent_drive_")
+            _dc = GoogleDriveClient()
+            _dc.authenticate()
+            _local_paths = _dc.download_vendor_documents(
+                vendor_name=vendor_name,
+                parent_folder_id=_folder_id,
+                temp_dir=_drive_tmp,
+            )
+            if _local_paths:
+                docs_folder = _drive_tmp
+            else:
+                console.print(f"  No Drive documents found for {vendor_name}.")
+                return
+        except Exception as exc:
+            console.print(f"  Drive error: {exc}")
+            return
+
+    if not docs_folder:
+        console.print("  No documents provided. Use --docs or --drive.")
+        return
+
+    try:
+        from core.documents.ingestor import DocumentIngestor
+        from core.documents.classifier import DocumentType
+
+        ingestor = DocumentIngestor(llm_provider=provider)
+        manifest = ingestor.ingest_folder(docs_folder)
+        ready_docs = [
+            d for d in manifest.documents
+            if d.extraction_ok and d.doc_type != DocumentType.UNKNOWN
+        ]
+
+        if not ready_docs:
+            console.print("  No documents could be extracted.")
+            return
+
+        agent_docs = [
+            AgentDocument(
+                filename=doc.file_name,
+                doc_type=str(doc.doc_type).split(".")[-1],
+                text=doc.text or "",
+                confidence=getattr(doc, "confidence", 0.85),
+            )
+            for doc in ready_docs
+            if doc.text
+        ]
+
+        # Integration context from intake
+        intake_context = None
+        try:
+            from core.profiles.vendor_cache import VendorProfileCache
+            from core.profiles.intake import build_integration_context_paragraph
+            _vp = VendorProfileCache().get(vendor_name)
+            if _vp and _vp.intake_completed:
+                intake_context = build_integration_context_paragraph(_vp)
+        except Exception:
+            pass
+
+        _label = "AI Bandit" if agent_type == "ai" else "Audit Bandit"
+        console.print(f"\n  [bold color(172)]{_label.upper()}[/]  [color(245)]{vendor_name}[/]")
+        console.print(f"  [color(245)]{len(agent_docs)} document(s) loaded[/]\n")
+
+        def _progress(msg):
+            if verbose:
+                console.print(f"  [dim]{msg}[/dim]")
+
+        if agent_type == "ai":
+            from core.agents.ai_bandit import AIBandit
+            agent = AIBandit(provider=provider, on_progress=_progress, max_tokens=4000)
+        else:
+            from core.agents.audit_bandit import AuditBandit
+            agent = AuditBandit(provider=provider, on_progress=_progress, max_tokens=5000)
+
+        result = agent.analyse(
+            vendor_name=vendor_name,
+            documents=agent_docs,
+            intake_context=intake_context,
+        )
+
+        if not result.success:
+            console.print(f"  [color(220)]⚠[/]  {result.error}")
+            return
+
+        console.print(f"  [green]✓[/green] {len(result.findings)} finding(s)\n")
+
+        for i, finding in enumerate(result.findings, 1):
+            console.print(f"  {i}. {finding}")
+
+        if result.score_overrides:
+            console.print(f"\n  [dim]Score overrides: {result.score_overrides}[/dim]")
+
+        if result.framework_evidence:
+            console.print(f"  [dim]Framework evidence: {', '.join(result.framework_evidence.keys())}[/dim]")
+
+        if result.raw_result.get("questions_for_vendor"):
+            console.print("\n  [bold]Questions for vendor:[/bold]")
+            for q in result.raw_result["questions_for_vendor"]:
+                console.print(f"    • {q}")
+
+        console.print()
+
+    except Exception as exc:
+        console.print(f"  [bold red]Error:[/] {exc}")
+    finally:
+        if _drive_tmp:
+            shutil.rmtree(_drive_tmp, ignore_errors=True)
+
+
 @main.command("sync")
 @click.argument("vendor_name", required=False)
 @click.option("--json", "as_json", is_flag=True,

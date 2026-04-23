@@ -16,7 +16,7 @@ import datetime
 import pathlib
 from typing import TYPE_CHECKING
 
-APP_VERSION = "1.4.1"
+APP_VERSION = "1.5.0"
 
 if TYPE_CHECKING:
     from core.agents.privacy_bandit import PrivacyAssessment
@@ -886,25 +886,156 @@ def write_html_report(
         "iso_27701_certified":      "ISO 27701",
         "iso_42001_certified":      "ISO 42001",
     }
-    _fw_labels_detected = [
-        _FW_LABELS.get(k, k) for k in result.framework_evidence
-    ]
-    if _fw_labels_detected:
-        _scope_note = (
-            '<p style="font-size:11px;color:#666;margin-top:8px;font-style:italic;">'
-            'Certification documents were ingested but their content has not been deeply analysed. '
-            'Scores reflect DPA and privacy policy language only. '
-            'SOC 2 and ISO audit content analysis is coming in a future Bandit version.'
-            '</p>'
+
+    # Use Audit Bandit detail when available
+    _certs_detail = getattr(result, "certifications_detail", {})
+    if _certs_detail:
+        _cert_items = []
+        _soc2d = _certs_detail.get("soc2", {})
+        if _soc2d.get("present"):
+            _currency = "✓ Current" if _soc2d.get("is_current") else "⚠ Stale"
+            _excepts = (
+                f" · {_soc2d['exception_count']} exception(s)"
+                if _soc2d.get("exceptions_found") else ""
+            )
+            _privacy = (
+                " · Privacy TSC" if _soc2d.get("privacy_tsc_included") else ""
+            )
+            _cert_items.append(
+                f"SOC 2 {_h(_soc2d.get('type', 'Type II'))} — {_currency}{_excepts}{_privacy}"
+            )
+        _iso1d = _certs_detail.get("iso27001", {})
+        if _iso1d.get("present"):
+            _currency = "✓ Current" if _iso1d.get("is_current") else "⚠ Stale"
+            _cert_items.append(f"ISO 27001 — {_currency}")
+        _iso7d = _certs_detail.get("iso27701", {})
+        if _iso7d.get("present"):
+            _currency = "✓ Current" if _iso7d.get("is_current") else "⚠ Stale"
+            _cert_items.append(f"ISO 27701 — {_currency}")
+        _iso4d = _certs_detail.get("iso42001", {})
+        if _iso4d.get("present"):
+            _currency = "✓ Current" if _iso4d.get("is_current") else "⚠ Stale"
+            _cert_items.append(f"ISO 42001 — {_currency}")
+
+        if _cert_items:
+            fw_html = (
+                "<ul class='fw-list'>"
+                + "".join(f"<li>✓&nbsp; {item}</li>" for item in _cert_items)
+                + "</ul>"
+            )
+        else:
+            fw_html = '<p class="none-p">Audit documents provided but no current certifications found.</p>'
+    else:
+        # Fallback to doc-type based detection
+        _fw_labels_detected = [
+            _FW_LABELS.get(k, k) for k in result.framework_evidence
+        ]
+        if _fw_labels_detected:
+            fw_html = (
+                "<ul class='fw-list'>"
+                + "".join(f"<li>✓&nbsp; {_h(f)}</li>" for f in _fw_labels_detected)
+                + "</ul>"
+            )
+        else:
+            fw_html = '<p class="none-p">None detected.</p>'
+
+    # ── AI/ML Analysis section ───────────────────────────────────────
+    _ai_result = getattr(result, "ai_bandit_result", None)
+    if _ai_result and _ai_result.success:
+        _air = _ai_result.raw_result
+        _ai_rows = []
+        _ai_rows.append(f"<tr><td>AI vendor</td><td>{'Yes' if _air.get('is_ai_vendor') else 'No'}</td></tr>")
+        _ai_rows.append(f"<tr><td>Trains on customer data</td><td>{_air.get('trains_on_customer_data', 'Unknown')}</td></tr>")
+        _ai_rows.append(f"<tr><td>Opt-out available</td><td>{_air.get('opt_out_available', 'Unknown')}</td></tr>")
+        _ai_rows.append(f"<tr><td>Legal basis stated</td><td>{'Yes' if _air.get('legal_basis_stated') else 'No'}</td></tr>")
+        if _air.get("legal_basis_detail"):
+            _ai_rows.append(f"<tr><td>Legal basis</td><td>{_h(str(_air['legal_basis_detail']))}</td></tr>")
+        _ai_rows.append(f"<tr><td>EU AI Act addressed</td><td>{'Yes' if _air.get('eu_ai_act_addressed') else 'No'}</td></tr>")
+        _ai_rows.append(f"<tr><td>DPA AI restriction clause</td><td>{'Yes' if _air.get('dpa_has_ai_restriction_clause') else 'No'}</td></tr>")
+        _ai_rows.append(f"<tr><td>D6 score recommendation</td><td>{_air.get('d6_score_recommendation', '—')}/5</td></tr>")
+
+        _ai_findings = "".join(f"<li>{_h(str(f))}</li>" for f in _ai_result.findings) if _ai_result.findings else "<li>None</li>"
+        _ai_questions = "".join(f"<li>{_h(str(q))}</li>" for q in _air.get("questions_for_vendor", []))
+        _ai_dpa_clause = _h(str(_air.get("recommended_dpa_clause", ""))) if _air.get("recommended_dpa_clause") else ""
+
+        ai_section_html = f"""<h2>AI/ML Analysis</h2>
+<p style="font-size:12px;color:#666;margin-bottom:12px;">Deep D6 analysis by AI Bandit · {len(_ai_result.documents_analysed)} document(s) analysed</p>
+<table><tbody>{''.join(_ai_rows)}</tbody></table>
+<p style="margin-top:12px;font-size:12px;color:#444;">{_h(str(_air.get('d6_rationale', '')))}</p>
+<h3 style="font-size:13px;margin-top:16px;">Findings</h3>
+<ul>{_ai_findings}</ul>"""
+        if _ai_dpa_clause:
+            ai_section_html += f'<h3 style="font-size:13px;margin-top:16px;">Recommended DPA clause</h3><p style="font-size:12px;color:#444;background:#f9f7f3;padding:12px;border-radius:6px;">{_ai_dpa_clause}</p>'
+        if _ai_questions:
+            ai_section_html += f'<h3 style="font-size:13px;margin-top:16px;">Questions for vendor</h3><ul>{_ai_questions}</ul>'
+    else:
+        ai_section_html = (
+            '<h2>AI/ML Analysis</h2>'
+            '<p class="none-p">No AI documents found. Upload an AI policy or model card to enable deep D6 analysis.</p>'
         )
-        fw_html = (
-            "<ul class='fw-list'>"
-            + "".join(f"<li>✓&nbsp; {_h(f)}</li>" for f in _fw_labels_detected)
-            + "</ul>"
-            + _scope_note
+
+    # ── Audit Evidence section ───────────────────────────────────────
+    _audit_result = getattr(result, "audit_bandit_result", None)
+    if _audit_result and _audit_result.success:
+        _audr = _audit_result.raw_result
+        _audit_items = []
+
+        _asoc2 = _audr.get("soc2", {})
+        if _asoc2.get("present"):
+            _audit_items.append(f"<h3 style='font-size:13px;margin-top:12px;'>SOC 2 {_h(str(_asoc2.get('type', 'Type II')))}</h3>")
+            _soc2_rows = []
+            if _asoc2.get("audit_period_end"):
+                _soc2_rows.append(f"<tr><td>Audit period end</td><td>{_h(str(_asoc2['audit_period_end']))}</td></tr>")
+            _soc2_rows.append(f"<tr><td>Current</td><td>{'Yes' if _asoc2.get('is_current') else 'No'}</td></tr>")
+            _soc2_rows.append(f"<tr><td>Opinion</td><td>{_h(str(_asoc2.get('opinion', '—')))}</td></tr>")
+            _soc2_rows.append(f"<tr><td>Exceptions</td><td>{'Yes (' + str(_asoc2.get('exception_count', '?')) + ')' if _asoc2.get('exceptions_found') else 'None'}</td></tr>")
+            _criteria = ", ".join(_asoc2.get("criteria_covered", [])) or "—"
+            _soc2_rows.append(f"<tr><td>Criteria</td><td>{_h(_criteria)}</td></tr>")
+            _soc2_rows.append(f"<tr><td>Privacy TSC</td><td>{'Included' if _asoc2.get('privacy_tsc_included') else 'Not included'}</td></tr>")
+            _audit_items.append(f"<table><tbody>{''.join(_soc2_rows)}</tbody></table>")
+
+        _aiso1 = _audr.get("iso27001", {})
+        if _aiso1.get("present"):
+            _audit_items.append(f"<h3 style='font-size:13px;margin-top:12px;'>ISO 27001</h3>")
+            _iso_rows = []
+            if _aiso1.get("cert_date"):
+                _iso_rows.append(f"<tr><td>Certificate date</td><td>{_h(str(_aiso1['cert_date']))}</td></tr>")
+            if _aiso1.get("expiry_date"):
+                _iso_rows.append(f"<tr><td>Expiry</td><td>{_h(str(_aiso1['expiry_date']))}</td></tr>")
+            _iso_rows.append(f"<tr><td>Current</td><td>{'Yes' if _aiso1.get('is_current') else 'No'}</td></tr>")
+            if _aiso1.get("scope"):
+                _iso_rows.append(f"<tr><td>Scope</td><td>{_h(str(_aiso1['scope']))}</td></tr>")
+            _audit_items.append(f"<table><tbody>{''.join(_iso_rows)}</tbody></table>")
+
+        # DPA conflicts
+        _conflicts = _audr.get("dpa_conflicts", [])
+        if _conflicts:
+            _conflict_rows = "".join(
+                f"<tr><td>{_h(str(c.get('claim', '')))}</td><td>{_h(str(c.get('evidence', '')))}</td>"
+                f"<td style='color:{'#C0392B' if c.get('severity') == 'high' else '#D4A017'}'>{_h(str(c.get('severity', '')))}</td></tr>"
+                for c in _conflicts
+            )
+            _audit_items.append(
+                '<h3 style="font-size:13px;margin-top:12px;">DPA vs Audit Conflicts</h3>'
+                '<table><thead><tr><th>DPA claim</th><th>Audit evidence</th><th>Severity</th></tr></thead>'
+                f'<tbody>{_conflict_rows}</tbody></table>'
+            )
+
+        _audit_findings = "".join(f"<li>{_h(str(f))}</li>" for f in _audit_result.findings) if _audit_result.findings else ""
+        if _audit_findings:
+            _audit_items.append(f'<h3 style="font-size:13px;margin-top:12px;">Findings</h3><ul>{_audit_findings}</ul>')
+
+        audit_section_html = (
+            '<h2>Audit Evidence</h2>'
+            f'<p style="font-size:12px;color:#666;margin-bottom:12px;">'
+            f'Analysed by Audit Bandit · {len(_audit_result.documents_analysed)} document(s)</p>'
+            + "".join(_audit_items)
         )
     else:
-        fw_html = '<p class="none-p">None detected.</p>'
+        audit_section_html = (
+            '<h2>Audit Evidence</h2>'
+            '<p class="none-p">No audit documents found. Upload a SOC 2 report or ISO certificate to enable audit analysis.</p>'
+        )
 
     # ── Policy/contract conflict banner (7C) ─────────────────────────
     conflict_banner = ""
@@ -1179,6 +1310,10 @@ details[open] .email-sum::after{{transform:rotate(90deg)}}
 
 <h2>Framework Certifications</h2>
 {fw_html}
+
+{ai_section_html}
+
+{audit_section_html}
 
 <h2>Team Summary</h2>
 {team_summary_html}

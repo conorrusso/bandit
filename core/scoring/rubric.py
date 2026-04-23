@@ -342,6 +342,8 @@ RUBRIC: dict[str, dict[str, Any]] = {
                     "d2_proof_of_compliance_on_request",
                     "d2_full_liability_retained",
                     "d2_contractual_flowdown",
+                    "d2_sub_processor_controls_audited",
+                    "d2_third_party_audit_clean",
                 ],
                 "description": (
                     "Published sub-processor list with locations and "
@@ -600,6 +602,7 @@ RUBRIC: dict[str, dict[str, Any]] = {
                     "d5_phased_reporting",
                     "d5_awareness_trigger_defined",
                     "d5_sub_processor_breach_cascade",
+                    "d5_breach_procedures_audited",
                 ],
                 "description": (
                     "Specific SLA (≤24 hrs), commits to all Art. 33(3) "
@@ -615,6 +618,7 @@ RUBRIC: dict[str, dict[str, Any]] = {
                     "d5_specific_sla_hours",
                     "d5_art33_3_content_commitment",
                     "d5_named_response_lead",
+                    "d5_breach_procedures_audited",
                 ],
                 "description": (
                     "Specific SLA (24–48 hrs), commits to providing "
@@ -790,6 +794,7 @@ RUBRIC: dict[str, dict[str, Any]] = {
                     "d7_ai_training_data_retention_separate",
                     "d7_sub_processor_deletion_obligations",
                     "d7_periodic_review_cycle",
+                    "d7_deletion_controls_audited",
                 ],
                 "description": (
                     "Category-specific retention schedules linked to "
@@ -884,6 +889,9 @@ RUBRIC: dict[str, dict[str, Any]] = {
                     "d8_independent_verification",
                     "d8_version_controlled",
                     "d8_regular_compliance_reports",
+                    "d8_independent_audit_clean",
+                    "d8_iso27001_current",
+                    "d8_iso27701_current",
                 ],
                 "description": (
                     "All Art. 28(3)(a)–(h) provisions, demonstrably "
@@ -904,6 +912,7 @@ RUBRIC: dict[str, dict[str, Any]] = {
                     "d8_ccpa_provisions",
                     "d8_international_transfers_specified",
                     "d8_independent_verification",
+                    "d8_independent_audit_clean",
                 ],
                 "description": (
                     "All Art. 28 provisions with specificity beyond "
@@ -1166,6 +1175,29 @@ def score_vendor(
             )
             score = rf_ceilings[dim_key]
         after_rf[dim_key] = score
+
+    # 4b. Signal-based ceilings (from specialist agents)
+    d6_ev = evidence.get("D6", {})
+    if d6_ev.get("d6_trains_without_consent"):
+        if after_rf.get("D6", 5) > 2:
+            cap_reasons["D6"].append(
+                "AI training without consent mechanism → ceiling 2"
+            )
+            after_rf["D6"] = 2
+
+    d8_ev = evidence.get("D8", {})
+    if d8_ev.get("d8_audit_stale"):
+        if after_rf.get("D8", 5) > 3:
+            cap_reasons["D8"].append(
+                "Stale audit evidence → ceiling 3"
+            )
+            after_rf["D8"] = 3
+    if d8_ev.get("d8_dpa_audit_conflict"):
+        if after_rf.get("D8", 5) > 3:
+            cap_reasons["D8"].append(
+                "DPA conflicts with audit evidence → ceiling 3"
+            )
+            after_rf["D8"] = 3
 
     # 5. Apply D8 dependency ceiling on D2, D5, D7
     d8_score = after_rf["D8"]

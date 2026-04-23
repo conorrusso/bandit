@@ -21,6 +21,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
+from core.agents.agent_base import AgentDocument
+from core.agents.ai_bandit import AIBandit
+from core.agents.audit_bandit import AuditBandit
 from core.agents.base_bandit import BaseBandit
 from core.agents.legal_bandit import LegalBandit
 from core.llm.base import BaseLLMProvider
@@ -591,6 +594,146 @@ class PrivacyBandit(BaseBandit):
             self._progress(
                 "Phase 3/4  Legal Bandit — no DPA or MSA found, skipped."
             )
+
+        # ── Phase 5/6: AI Bandit + Audit Bandit ─────────────────────────
+        ai_result = None
+        audit_result = None
+
+        if ready_docs:
+            # Build AgentDocument list from ready_docs
+            agent_docs = [
+                AgentDocument(
+                    filename=doc.file_name,
+                    doc_type=str(doc.doc_type).split(".")[-1],
+                    text=doc.text or "",
+                    confidence=getattr(doc, "confidence", 0.85),
+                )
+                for doc in ready_docs
+                if doc.text
+            ]
+
+            # ── AI Bandit ────────────────────────────
+            self._progress("AI Bandit — checking…")
+            try:
+                ai_bandit = AIBandit(
+                    provider=self.provider,
+                    on_progress=self._on_progress,
+                    max_tokens=4000,
+                )
+                ai_result = ai_bandit.analyse(
+                    vendor_name=vendor,
+                    documents=agent_docs,
+                    intake_context=integration_context,
+                )
+                if ai_result.success:
+                    # Merge AI signals into raw_json for
+                    # future re-scoring if needed
+                    _sigs = raw_json.setdefault("signals", {})
+                    for k, v in ai_result.signals.items():
+                        if v and not _sigs.get(k):
+                            _sigs[k] = v
+                    # Merge framework evidence
+                    _fw = raw_json.setdefault(
+                        "framework_certifications", {}
+                    )
+                    for k, v in ai_result.framework_evidence.items():
+                        if v:
+                            _fw.setdefault(k, v)
+                    self._progress(
+                        f"AI Bandit — {len(ai_result.findings)} finding(s)"
+                    )
+                else:
+                    self._progress(
+                        f"AI Bandit — skipped ({ai_result.error})"
+                    )
+            except Exception as _ai_err:
+                import logging as _log
+                _log.getLogger("bandit").warning(
+                    f"AI Bandit failed: {_ai_err}"
+                )
+
+            # ── Audit Bandit ─────────────────────────
+            self._progress("Audit Bandit — checking…")
+            try:
+                audit_bandit = AuditBandit(
+                    provider=self.provider,
+                    on_progress=self._on_progress,
+                    max_tokens=5000,
+                )
+                audit_result = audit_bandit.analyse(
+                    vendor_name=vendor,
+                    documents=agent_docs,
+                    intake_context=integration_context,
+                )
+                if audit_result.success:
+                    # Merge audit signals
+                    _sigs = raw_json.setdefault("signals", {})
+                    for k, v in audit_result.signals.items():
+                        if v and not _sigs.get(k):
+                            _sigs[k] = v
+                    # Merge framework evidence (authoritative)
+                    _fw = raw_json.setdefault(
+                        "framework_certifications", {}
+                    )
+                    for k, v in audit_result.framework_evidence.items():
+                        if v:
+                            _fw[k] = v
+                    self._progress(
+                        f"Audit Bandit — {len(audit_result.findings)} finding(s)"
+                    )
+                else:
+                    self._progress(
+                        f"Audit Bandit — skipped ({audit_result.error})"
+                    )
+            except Exception as _audit_err:
+                import logging as _log2
+                _log2.getLogger("bandit").warning(
+                    f"Audit Bandit failed: {_audit_err}"
+                )
+
+        # Apply score overrides from specialist agents
+        for _agent_result in [ai_result, audit_result]:
+            if not _agent_result or not _agent_result.success:
+                continue
+            for dim, override_score in _agent_result.score_overrides.items():
+                if dim in result.dimensions:
+                    current = result.dimensions[dim].capped_score
+                    # Override raises score, never lowers
+                    if override_score > current:
+                        result.dimensions[dim].capped_score = override_score
+
+        # Store agent results on assessment
+        result.ai_bandit_result = ai_result
+        result.audit_bandit_result = audit_result
+
+        # Store certification detail from Audit Bandit
+        if audit_result and audit_result.success:
+            soc2 = audit_result.raw_result.get("soc2", {})
+            iso27001 = audit_result.raw_result.get("iso27001", {})
+            iso27701 = audit_result.raw_result.get("iso27701", {})
+            iso42001 = audit_result.raw_result.get("iso42001", {})
+
+            certs = []
+            if soc2.get("present") and soc2.get("is_current"):
+                privacy_tsc = soc2.get("privacy_tsc_included")
+                certs.append(
+                    "SOC 2 Type II"
+                    + (" (Privacy TSC)" if privacy_tsc else "")
+                )
+            if iso27001.get("present") and iso27001.get("is_current"):
+                certs.append("ISO 27001")
+            if iso27701.get("present") and iso27701.get("is_current"):
+                certs.append("ISO 27701")
+            if iso42001.get("present") and iso42001.get("is_current"):
+                certs.append("ISO 42001")
+
+            result.certifications = certs
+            result.certifications_detail = {
+                "soc2": soc2,
+                "iso27001": iso27001,
+                "iso27701": iso27701,
+                "iso42001": iso42001,
+            }
 
         return PrivacyAssessment(result=result, sources=list(self._fetch_meta))
 

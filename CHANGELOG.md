@@ -6,6 +6,47 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## [1.5.0] — 2026-04-22
+
+### Added
+
+AI Bandit (`core/agents/ai_bandit.py`):
+- Deep D6 analysis — AI/ML usage, training practices, opt-out mechanisms, legal basis, EU AI Act compliance
+- Reads: AI policies, model cards, DPA AI clauses, responsible AI statements, Terms of Service
+- Outputs: D6 signals, score recommendation, recommended DPA clause, vendor questions
+- Maps to existing rubric D6 signals (`d6_ai_disclosed_as_separate_purpose`, `d6_opt_out_exists`, etc.)
+- Triggers: AI_POLICY / MODEL_CARD doc present OR intake marks vendor as AI vendor
+
+Audit Bandit (`core/agents/audit_bandit.py`):
+- SOC 2 Type II deep analysis — opinion, exceptions, criteria covered, Privacy TSC, audit currency
+- ISO 27001 / 27701 / 42001 currency and scope check
+- DPA conflict detection — flags when audit evidence contradicts DPA claims
+- New D2/D5/D7/D8 signals from audit evidence
+- Score overrides: SOC 2 clean + Privacy TSC raises D5 and D8 to minimum 3/5
+- Triggers: any SOC2/ISO/pentest/HITRUST doc present
+
+Shared infrastructure (`core/agents/agent_base.py`):
+- `AgentDocument`, `AgentResult`, `BaseAgent` classes
+- Shared `_call_llm_json` using `complete_json()` (no duplicate JSON parsing)
+- Shared `_truncate_text` with 40k char budget
+- Shared `_progress` callback pattern
+
+CLI:
+- `bandit ai "Vendor" [--drive]` — AI Bandit standalone
+- `bandit audit "Vendor" [--drive]` — Audit Bandit standalone
+
+Report:
+- Framework Certifications: now shows SOC 2 currency, exception count, Privacy TSC status, ISO dates from Audit Bandit
+- AI/ML Analysis section: D6 deep findings, recommended DPA clause, vendor questions
+- Audit Evidence section: full SOC 2 and ISO summary, DPA conflicts
+
+Rubric:
+- New D6 signal-based ceiling: `d6_trains_without_consent` → score ceiling 2
+- New D8 signal-based ceilings: `d8_audit_stale` → ceiling 3, `d8_dpa_audit_conflict` → ceiling 3
+- New signals in D2/D5/D7/D8 level requirements from audit evidence
+
+---
+
 ## [1.4.1] — 2026-04-22
 
 ### Added
