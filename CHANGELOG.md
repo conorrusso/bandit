@@ -6,6 +6,27 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## [1.5.1] — 2026-04-23
+
+### Changed
+- AI Bandit and Audit Bandit no longer produce score recommendations. LLMs extract signals; the rubric scores deterministically. This ensures the same vendor gets the same score regardless of which AI provider is used.
+
+### Removed
+- `AgentResult.score_overrides` field
+- `d6_score_recommendation` and `d6_rationale` from AI Bandit prompt
+- D6 scoring guide section from AI Bandit prompt
+- `AuditBandit._build_score_overrides()` method
+- Score override application block in `privacy_bandit.py`
+
+### Preserved
+- All signal extraction logic (AI Bandit: 13+ D6 signals; Audit Bandit: SOC 2/ISO/pentest signals)
+- Framework evidence flow to rubric
+- Top findings, red flags, vendor questions, recommended DPA clauses
+- `bandit ai` and `bandit audit` standalone commands
+- HTML report sections for AI/ML analysis and audit evidence
+
+---
+
 ## [1.5.0] — 2026-04-22
 
 ### Added

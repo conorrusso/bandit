@@ -295,11 +295,6 @@ DOCUMENTS:
             k: v for k, v in framework_evidence.items() if v
         }
 
-        # Score overrides based on audit findings
-        score_overrides = self._build_score_overrides(
-            result
-        )
-
         findings = result.get("top_findings", [])
         red_flags = result.get("red_flags", [])
 
@@ -309,7 +304,6 @@ DOCUMENTS:
             success=True,
             signals=signals,
             framework_evidence=framework_evidence,
-            score_overrides=score_overrides,
             findings=findings + red_flags,
             raw_result=result,
             documents_analysed=[
@@ -370,36 +364,3 @@ DOCUMENTS:
 
         return signals
 
-    def _build_score_overrides(
-        self,
-        result: dict,
-    ) -> dict:
-        """
-        Build score overrides based on audit quality.
-        Only override when we have strong evidence.
-        """
-        overrides = {}
-        soc2 = result.get("soc2", {})
-
-        # SOC 2 with Privacy TSC and no exceptions
-        # is strong evidence for D5 and D8
-        if (soc2.get("present")
-                and soc2.get("is_current")
-                and soc2.get("privacy_tsc_included")
-                and not soc2.get("exceptions_found")):
-            overrides["D5"] = max(
-                overrides.get("D5", 0), 3
-            )
-            overrides["D8"] = max(
-                overrides.get("D8", 0), 3
-            )
-
-        # SOC 2 with many exceptions — cap D8
-        if (soc2.get("present")
-                and soc2.get("exceptions_found")
-                and soc2.get("exception_count", 0) > 2):
-            overrides["D8"] = min(
-                overrides.get("D8", 5), 2
-            )
-
-        return overrides

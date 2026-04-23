@@ -691,17 +691,6 @@ class PrivacyBandit(BaseBandit):
                     f"Audit Bandit failed: {_audit_err}"
                 )
 
-        # Apply score overrides from specialist agents
-        for _agent_result in [ai_result, audit_result]:
-            if not _agent_result or not _agent_result.success:
-                continue
-            for dim, override_score in _agent_result.score_overrides.items():
-                if dim in result.dimensions:
-                    current = result.dimensions[dim].capped_score
-                    # Override raises score, never lowers
-                    if override_score > current:
-                        result.dimensions[dim].capped_score = override_score
-
         # Store agent results on assessment
         result.ai_bandit_result = ai_result
         result.audit_bandit_result = audit_result

@@ -157,8 +157,6 @@ Return ONLY this JSON object:
   "algorithmic_disgorgement_addressed": <true|false>,
   "bias_fairness_documented": <true|false>,
   "model_update_cadence_stated": <true|false>,
-  "d6_score_recommendation": <1|2|3|4|5>,
-  "d6_rationale": "<one paragraph>",
   "red_flags": ["<specific concern from text>"],
   "top_findings": [
     "<finding 1 — specific, cite document section>",
@@ -173,18 +171,15 @@ Return ONLY this JSON object:
   ]
 }}
 
-D6 scoring guide:
-5 — Explicit opt-in required, customer data segregated, \
-legal basis stated, AI training retention defined, \
-DPA has explicit AI restriction clause
-4 — Opt-out available and prominent, legal basis \
-stated, minimal use of customer data for training
-3 — AI use disclosed, opt-out exists but not prominent, \
-partial controls documented
-2 — AI use disclosed but opt-out unclear, vague legal \
-basis, customer data may be used for training
-1 — No AI disclosure, customer data used for training \
-without consent mechanism, or active opt-out denied
+For each signal above, answer ONLY true or false
+based on what is explicitly stated in the documents.
+Do not infer. Do not assume. If a signal is not
+explicitly addressed in the document, mark it false.
+
+For ai_training_retention_stated and similar:
+only mark true if the document contains a specific
+statement about this topic — not if it can be
+inferred from other language.
 
 DOCUMENTS:
 {docs_text}"""
@@ -255,12 +250,6 @@ DOCUMENTS:
         if result.get("iso_42001_certified"):
             framework_evidence["iso_42001_certified"] = True
 
-        # Score override if high confidence
-        score_overrides = {}
-        rec_score = result.get("d6_score_recommendation")
-        if rec_score and isinstance(rec_score, int):
-            score_overrides["D6"] = rec_score
-
         # Build findings list
         findings = result.get("top_findings", [])
         red_flags = result.get("red_flags", [])
@@ -271,7 +260,6 @@ DOCUMENTS:
             success=True,
             signals=signals,
             framework_evidence=framework_evidence,
-            score_overrides=score_overrides,
             findings=findings + red_flags,
             raw_result=result,
             documents_analysed=[

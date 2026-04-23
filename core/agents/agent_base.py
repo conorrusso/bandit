@@ -43,11 +43,6 @@ class AgentResult:
     # Framework evidence to pass to score_vendor()
     framework_evidence: dict = field(default_factory=dict)
 
-    # Score overrides — agent can override specific
-    # dimension scores when it has high confidence
-    # Format: {"D6": 4, "D8": 3}
-    score_overrides: dict = field(default_factory=dict)
-
     # Human-readable findings for report
     findings: list[str] = field(default_factory=list)
 
