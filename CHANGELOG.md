@@ -6,6 +6,45 @@ Format: `Added` new features · `Changed` behaviour or UX · `Fixed` bugs · `Re
 
 ---
 
+## [1.5.2] — 2026-04-27
+
+### Added
+
+Reference documents (`core/scoring/`):
+- `EVIDENCE_HIERARCHY.md` — foundational rules for evidence weighting and merge
+- `RUBRIC_SOC2.md` — 50+ explicit SOC 2 signals with exact extraction criteria
+- `SOC2_FIRMS.md` — recognised audit firms list (~40 firms)
+- `RUBRIC_AI_POLICY.md` — 60+ explicit AI signals across 10 sections
+- `RUBRIC_ISO.md` — 80+ ISO signals (27001/27701/42001) with derived values
+- `ISO_CERT_BODIES.md` — recognised ISO certification bodies list (~30 bodies)
+
+### Changed
+
+Agents now use reference documents as source of truth:
+- AI Bandit prompt rebuilt from `RUBRIC_AI_POLICY.md` — 60+ signals with TRUE/FALSE/NULL distinction
+- Audit Bandit prompt rebuilt from `RUBRIC_SOC2.md` and `RUBRIC_ISO.md` — 130+ signals
+- Both agents extract signals only — never scores
+- Firm/body recognition through documented lists loaded at runtime
+- Absence vs denial tracking (TRUE / FALSE / NULL) per evidence hierarchy
+- Derived values (currency_status, iso_currency) calculated by agent code, not LLM
+
+### Added to rubric.py
+
+- `agent_signals` parameter on `score_vendor()` for rubric-document signals
+- SOC 2 modifiers for D2, D5, D7, D8 (simple + compound + multipliers)
+- ISO modifiers for D2, D5, D7, D8 (27001/27701) with invalidation rules
+- ISO 42001 modifiers for D6 and D8
+- AI signal modifiers and ceilings for D6
+- SOC 2 red flag conditions (6 conditions)
+- ISO red flag conditions (7 conditions)
+- AI red flag conditions (7 conditions)
+
+### Determinism
+
+The score for a given vendor + document set is now deterministic regardless of which AI provider is used. Same inputs → same outputs. Agent signals flow through weighted modifiers and hard ceilings — no LLM scoring anywhere.
+
+---
+
 ## [1.5.1] — 2026-04-23
 
 ### Changed

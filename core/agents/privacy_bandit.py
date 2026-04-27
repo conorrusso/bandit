@@ -490,6 +490,7 @@ class PrivacyBandit(BaseBandit):
             auto_escalate_triggers=auto_escalate_triggers,
             assessment_scope=assessment_scope,
             dpa_available=dpa_found,
+            agent_signals=agent_signals if agent_signals else None,
         )
 
         if config:
@@ -598,6 +599,7 @@ class PrivacyBandit(BaseBandit):
         # ── Phase 5/6: AI Bandit + Audit Bandit ─────────────────────────
         ai_result = None
         audit_result = None
+        agent_signals: dict = {}  # un-prefixed signals for rubric modifiers
 
         if ready_docs:
             # Build AgentDocument list from ready_docs
@@ -618,7 +620,7 @@ class PrivacyBandit(BaseBandit):
                 ai_bandit = AIBandit(
                     provider=self.provider,
                     on_progress=self._on_progress,
-                    max_tokens=4000,
+                    max_tokens=6000,
                 )
                 ai_result = ai_bandit.analyse(
                     vendor_name=vendor,
@@ -632,6 +634,10 @@ class PrivacyBandit(BaseBandit):
                     for k, v in ai_result.signals.items():
                         if v and not _sigs.get(k):
                             _sigs[k] = v
+                    # Collect un-prefixed signals for agent_signals
+                    for k, v in ai_result.signals.items():
+                        if not k.startswith("d6_"):
+                            agent_signals[k] = v
                     # Merge framework evidence
                     _fw = raw_json.setdefault(
                         "framework_certifications", {}
@@ -658,7 +664,7 @@ class PrivacyBandit(BaseBandit):
                 audit_bandit = AuditBandit(
                     provider=self.provider,
                     on_progress=self._on_progress,
-                    max_tokens=5000,
+                    max_tokens=8000,
                 )
                 audit_result = audit_bandit.analyse(
                     vendor_name=vendor,
@@ -671,6 +677,10 @@ class PrivacyBandit(BaseBandit):
                     for k, v in audit_result.signals.items():
                         if v and not _sigs.get(k):
                             _sigs[k] = v
+                    # Collect un-prefixed signals for agent_signals
+                    for k, v in audit_result.signals.items():
+                        if not k.startswith(("d2_", "d5_", "d7_", "d8_")):
+                            agent_signals[k] = v
                     # Merge framework evidence (authoritative)
                     _fw = raw_json.setdefault(
                         "framework_certifications", {}

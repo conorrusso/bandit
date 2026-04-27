@@ -2188,10 +2188,10 @@ def _run_agent_standalone(
 
         if agent_type == "ai":
             from core.agents.ai_bandit import AIBandit
-            agent = AIBandit(provider=provider, on_progress=_progress, max_tokens=4000)
+            agent = AIBandit(provider=provider, on_progress=_progress, max_tokens=6000)
         else:
             from core.agents.audit_bandit import AuditBandit
-            agent = AuditBandit(provider=provider, on_progress=_progress, max_tokens=5000)
+            agent = AuditBandit(provider=provider, on_progress=_progress, max_tokens=8000)
 
         result = agent.analyse(
             vendor_name=vendor_name,

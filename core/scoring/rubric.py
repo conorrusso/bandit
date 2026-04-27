@@ -1039,6 +1039,772 @@ FRAMEWORK_MODIFIERS: dict[str, dict[str, float]] = {
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Agent signal modifiers — from RUBRIC_SOC2.md, RUBRIC_ISO.md,
+# RUBRIC_AI_POLICY.md.  These are applied AFTER framework modifiers
+# and BEFORE red-flag ceilings.
+#
+# Signals use the exact names from the rubric documents.
+# Agents output these names; _reshape_signals() routes them to
+# the correct dimension based on this mapping.
+#
+# Each entry: signal_name → {dim: weight}.
+# Compound conditions (multiple signals required) are handled
+# separately in _apply_agent_modifiers().
+# ─────────────────────────────────────────────────────────────────────
+
+# --- SOC 2 modifiers (per RUBRIC_SOC2.md "Evidence-to-signal mapping") ---
+
+SOC2_MODIFIERS: dict[str, dict[str, float]] = {
+    # D2 positive
+    "sub_processor_controls_tested": {"D2": 0.3},
+    "tsc_privacy_in_scope": {"D2": 0.2, "D5": 0.2, "D8": 0.3},
+    # D5 positive
+    "breach_notification_controls_tested": {"D5": 0.4},
+    # D7 positive
+    "data_deletion_controls_tested": {"D7": 0.3},
+    "tsc_confidentiality_in_scope": {"D7": 0.1},
+    # D8 positive
+    "auditor_firm_recognised": {"D8": 0.1},
+    # D5/D8 negative
+    "exceptions_in_incident_response": {"D5": -0.5},
+    # D8 negative
+    "exceptions_found": {"D8": -0.2},
+}
+
+# SOC 2 compound modifiers — require multiple signals TRUE
+SOC2_COMPOUND_MODIFIERS: list[dict] = [
+    {
+        "name": "soc2_type2_clean_current",
+        "requires": [
+            ("soc2_type2_present", True),
+            ("opinion_type", "unqualified"),
+            ("currency_status", "current"),
+        ],
+        "modifiers": {"D8": 0.5},
+    },
+    {
+        "name": "exceptions_all_responded_specific",
+        "requires": [
+            ("all_exceptions_have_responses", True),
+            ("management_responses_are_specific", True),
+        ],
+        "modifiers": {"D8": 0.2},
+    },
+]
+
+# SOC 2 multipliers — reduce modifier value, don't replace
+SOC2_MULTIPLIERS: dict[str, float] = {
+    "currency_status_stale": 0.5,       # stale report halves all SOC 2 modifiers
+    "scope_narrowing_concern": 0.5,     # narrow scope halves modifiers
+    "soc2_type1_only": 0.4,            # Type I only: 40% of Type II value
+}
+
+# SOC 2 ceilings — hard caps
+SOC2_CEILINGS: dict[str, dict[str, int]] = {
+    "opinion_type_adverse": {"D8": 2},
+    "opinion_type_disclaimer": {"D8": 2},
+}
+
+# --- ISO modifiers (per RUBRIC_ISO.md "Evidence-to-signal mapping") ---
+
+ISO_MODIFIERS: dict[str, dict[str, float]] = {
+    # 27001
+    "iso_27001_supplier_controls_implemented": {"D2": 0.3},
+    "iso_27001_incident_management_controls_implemented": {"D5": 0.4},
+    "iso_27001_data_protection_controls_implemented": {"D7": 0.3},
+    # 27701
+    "iso_27701_present": {"D7": 0.4},
+    # 42001 → D6 and D8
+    "iso_42001_aims_implemented": {"D6": 0.2},
+    "iso_42001_ai_risk_assessment_documented": {"D6": 0.2},
+    "iso_42001_data_governance_for_ai": {"D6": 0.2},
+}
+
+# ISO compound modifiers
+ISO_COMPOUND_MODIFIERS: list[dict] = [
+    {
+        "name": "iso_27001_current_accredited_broad",
+        "requires": [
+            ("iso_27001_present", True),
+            ("iso_27001_currency_status", "current_recent"),
+            ("iso_27001_certification_body_accredited", True),
+            ("iso_27001_scope_includes_primary_service", True),
+        ],
+        "modifiers": {"D2": 0.2, "D5": 0.2, "D8": 0.4},
+    },
+    {
+        "name": "iso_27701_full_valid",
+        "requires": [
+            ("iso_27701_present", True),
+            ("iso_27701_extends_27001", True),
+            ("iso_27701_certification_body_accredited", True),
+        ],
+        "modifiers": {"D8": 0.5},
+    },
+    {
+        "name": "iso_42001_current_accredited",
+        "requires": [
+            ("iso_42001_present", True),
+            ("iso_42001_certification_body_accredited", True),
+        ],
+        "modifiers": {"D6": 0.4, "D8": 0.3},
+    },
+    {
+        "name": "iso_27001_transparent_findings",
+        "requires": [
+            ("iso_27001_audit_findings_stated", True),
+        ],
+        "modifiers": {"D8": 0.2},
+        "extra_condition": "iso_27001_major_nonconformities_zero",
+    },
+]
+
+# ISO invalidation rules — certificate ignored entirely
+ISO_INVALIDATION_SIGNALS: set[str] = {
+    "iso_certification_body_unaccredited",
+    "iso_27701_without_27001",
+    "iso_certificate_expired",
+    "iso_27001_2013_post_transition",
+}
+
+# ISO multipliers
+ISO_MULTIPLIERS: dict[str, float] = {
+    "iso_scope_excludes_customer_service": 0.25,   # 75% reduction
+    "iso_27001_scope_narrowing_concern": 0.5,      # 50% reduction
+}
+
+# --- AI policy modifiers (per RUBRIC_AI_POLICY.md) ---
+
+AI_D6_MODIFIERS: dict[str, float] = {
+    # Strong positives
+    "opt_in_required": 0.6,
+    "customer_data_segregated_from_training": 0.5,
+    "dpa_prohibits_training_on_customer_data": 0.5,
+    "iso_42001_certified": 0.4,
+    # Moderate positives
+    "opt_out_retroactive": 0.3,
+    "legal_basis_stated": 0.2,
+    "bias_mitigation_documented": 0.2,
+    "human_in_the_loop_described": 0.2,
+    "ai_decisions_contestable": 0.2,
+    # Weak positives
+    "eu_ai_act_addressed": 0.1,
+    "training_data_sources_disclosed": 0.1,
+    "model_card_available": 0.1,
+    "algorithmic_disgorgement_addressed": 0.1,
+    "nist_ai_rmf_referenced": 0.1,
+}
+
+# AI compound positive — trains=FALSE explicitly (not null)
+AI_D6_COMPOUND_MODIFIERS: list[dict] = [
+    {
+        "name": "trains_explicitly_false",
+        "requires": [("trains_on_customer_data", False)],
+        "modifier": 0.4,
+        "require_explicit_false": True,
+    },
+    {
+        "name": "self_service_optout",
+        "requires": [
+            ("opt_out_available", True),
+            ("opt_out_accessibility", "self_service"),
+        ],
+        "modifier": 0.3,
+    },
+]
+
+# AI negative modifiers on D6
+AI_D6_NEGATIVE_MODIFIERS: list[dict] = [
+    {
+        "name": "trains_no_optout",
+        "requires": [
+            ("trains_on_customer_data", True),
+            ("opt_out_available", False),
+        ],
+        "modifier": -0.8,
+    },
+    {
+        "name": "foundation_model_training",
+        "requires": [
+            ("customer_data_used_for_foundation_model_training", True),
+        ],
+        "modifier": -0.6,
+    },
+    {
+        "name": "optout_denied_for_ai",
+        "requires": [
+            ("opt_out_denied_for_ai_features", True),
+        ],
+        "modifier": -0.5,
+    },
+    {
+        "name": "training_inference_contradiction",
+        "requires": [
+            ("training_claim_contradicts_inference_retention", True),
+        ],
+        "modifier": -0.3,
+    },
+    {
+        "name": "trains_contract_negotiation_optout",
+        "requires": [
+            ("trains_on_customer_data", True),
+            ("opt_out_accessibility", "contract_negotiation"),
+        ],
+        "modifier": -0.4,
+    },
+    {
+        "name": "no_legal_basis_for_ai",
+        "requires": [
+            ("is_ai_vendor", True),
+            ("legal_basis_stated", False),
+        ],
+        "modifier": -0.3,
+        "require_explicit_false": True,
+    },
+    {
+        "name": "implausible_ai_act_tier",
+        "requires": [
+            ("eu_ai_act_tier_plausible", False),
+        ],
+        "modifier": -0.3,
+        "require_explicit_false": True,
+    },
+    {
+        "name": "optout_forward_only",
+        "requires": [
+            ("opt_out_retroactive", False),
+        ],
+        "modifier": -0.2,
+        "require_explicit_false": True,
+    },
+]
+
+# AI D6 hard ceilings (per RUBRIC_AI_POLICY.md "D6 — Score ceilings")
+AI_D6_CEILINGS: list[dict] = [
+    {
+        "name": "trains_no_optout_no_optin",
+        "requires": [
+            ("trains_on_customer_data", True),
+            ("opt_out_available", False),
+            ("opt_in_required", False),
+        ],
+        "max_score": 1,
+        "label": "AI training on customer data without opt-out or opt-in → D6 ceiling 1",
+    },
+    {
+        "name": "ai_vendor_no_disclosure",
+        "requires": [
+            ("is_ai_vendor", True),
+        ],
+        "all_null_check": True,  # all other AI signals are None
+        "max_score": 2,
+        "label": "AI vendor with no AI policy disclosure → D6 ceiling 2",
+    },
+    {
+        "name": "foundation_model_no_optout",
+        "requires": [
+            ("customer_data_used_for_foundation_model_training", True),
+        ],
+        "extra_false": ["opt_out_available"],
+        "max_score": 2,
+        "label": "Foundation model training without opt-out → D6 ceiling 2",
+    },
+    {
+        "name": "training_inference_contradiction_ceiling",
+        "requires": [
+            ("training_claim_contradicts_inference_retention", True),
+        ],
+        "max_score": 3,
+        "label": "Training claim contradicts inference retention → D6 ceiling 3",
+    },
+]
+
+# --- SOC 2 red flag conditions (per RUBRIC_SOC2.md) ---
+
+SOC2_RED_FLAGS: list[dict] = [
+    {
+        "name": "scope_excludes_evaluated_product",
+        "signals": [("scope_narrowing_concern", True)],
+        "severity": "high",
+        "message": (
+            "SOC 2 scope excludes the product or service being "
+            "evaluated. The audit evidence does not cover what "
+            "you are buying."
+        ),
+    },
+    {
+        "name": "exceptions_without_management_response",
+        "signals": [("all_exceptions_have_responses", False)],
+        "require_explicit_false": True,
+        "severity": "high",
+        "message": (
+            "Audit exceptions found without documented management "
+            "responses. Indicates weak remediation governance."
+        ),
+    },
+    {
+        "name": "stale_audit_no_bridge",
+        "signals": [
+            ("currency_status", "stale"),
+            ("bridge_letter_present", False),
+        ],
+        "severity": "high",
+        "message": (
+            "SOC 2 audit period ended 12–18 months ago with no "
+            "bridge letter. Evidence currency is questionable."
+        ),
+    },
+    {
+        "name": "qualified_opinion_privacy_tsc",
+        "signals": [
+            ("opinion_type", "qualified"),
+            ("tsc_privacy_in_scope", True),
+            ("tsc_privacy_exceptions_found", True),
+        ],
+        "severity": "high",
+        "message": (
+            "Qualified opinion with Privacy TSC exceptions. "
+            "Privacy controls have been specifically flagged."
+        ),
+    },
+    {
+        "name": "adverse_or_disclaimer_opinion",
+        "signals": [("opinion_type", "adverse")],
+        "severity": "critical",
+        "message": (
+            "Adverse or disclaimer audit opinion. Controls did "
+            "not operate effectively."
+        ),
+    },
+    {
+        "name": "inquiry_only_testing",
+        "signals": [("testing_primarily_inquiry", True)],
+        "severity": "medium",
+        "message": (
+            "Testing methodology primarily inquiry-based. "
+            "Limited substantive evidence-based procedures."
+        ),
+    },
+]
+
+# --- ISO red flag conditions (per RUBRIC_ISO.md) ---
+
+ISO_RED_FLAGS: list[dict] = [
+    {
+        "name": "iso_certificate_expired",
+        "signals": [("iso_certificate_expired", True)],
+        "severity": "high",
+        "message": "ISO certificate has expired with no recertification reference.",
+    },
+    {
+        "name": "iso_stale_no_surveillance",
+        "signals": [("iso_certificate_no_surveillance_audit", True)],
+        "severity": "high",
+        "message": (
+            "ISO certificate >12 months old with no surveillance "
+            "audit referenced."
+        ),
+    },
+    {
+        "name": "iso_unaccredited_body",
+        "signals": [("iso_certification_body_unaccredited", True)],
+        "severity": "high",
+        "message": (
+            "ISO certification body not on recognised accreditation "
+            "list. Certificate provides limited assurance."
+        ),
+    },
+    {
+        "name": "iso_27701_without_27001",
+        "signals": [("iso_27701_without_27001", True)],
+        "severity": "high",
+        "message": (
+            "ISO 27701 claimed without underlying ISO 27001 "
+            "certification. This is invalid."
+        ),
+    },
+    {
+        "name": "iso_scope_excludes_service",
+        "signals": [("iso_scope_excludes_customer_service", True)],
+        "severity": "high",
+        "message": (
+            "ISO certificate scope does not cover the "
+            "customer-facing service being evaluated."
+        ),
+    },
+    {
+        "name": "iso_2013_post_transition",
+        "signals": [("iso_27001_2013_post_transition", True)],
+        "severity": "high",
+        "message": (
+            "ISO 27001:2013 certificate after October 2025 "
+            "transition deadline. Effectively expired."
+        ),
+    },
+    {
+        "name": "iso_image_only",
+        "signals": [("iso_certificate_image_only", True)],
+        "severity": "low",
+        "message": (
+            "ISO certificate provided as image only. "
+            "Verification is more difficult."
+        ),
+    },
+]
+
+# --- AI red flag conditions (per RUBRIC_AI_POLICY.md) ---
+
+AI_RED_FLAGS: list[dict] = [
+    {
+        "name": "ai_vendor_no_policy",
+        "signals": [("ai_use_without_disclosure", True)],
+        "severity": "high",
+        "message": (
+            "Vendor appears to use AI but no AI policy or "
+            "disclosure was found in provided documents."
+        ),
+    },
+    {
+        "name": "training_without_optout",
+        "signals": [
+            ("trains_on_customer_data", True),
+            ("opt_out_available", False),
+        ],
+        "severity": "critical",
+        "message": (
+            "Vendor trains on customer data with no opt-out "
+            "mechanism available."
+        ),
+    },
+    {
+        "name": "training_inference_contradiction",
+        "signals": [
+            ("training_claim_contradicts_inference_retention", True),
+        ],
+        "severity": "high",
+        "message": (
+            "Vendor claims not to train on customer data but "
+            "retains inference data for model improvement."
+        ),
+    },
+    {
+        "name": "foundation_model_training_no_optin",
+        "signals": [
+            ("customer_data_used_for_foundation_model_training", True),
+            ("opt_in_required", False),
+        ],
+        "severity": "critical",
+        "message": (
+            "Customer data used for foundation model training "
+            "without opt-in requirement. Essentially irreversible."
+        ),
+    },
+    {
+        "name": "implausible_ai_act_tier",
+        "signals": [("eu_ai_act_tier_plausible", False)],
+        "require_explicit_false": True,
+        "severity": "medium",
+        "message": (
+            "Claimed EU AI Act risk tier appears implausible "
+            "for the described use case."
+        ),
+    },
+    {
+        "name": "no_legal_basis_for_ai",
+        "signals": [
+            ("is_ai_vendor", True),
+            ("legal_basis_stated", False),
+        ],
+        "require_explicit_false": True,
+        "severity": "high",
+        "message": (
+            "AI processing of personal data with no stated "
+            "legal basis under GDPR."
+        ),
+    },
+    {
+        "name": "third_party_ai_no_subprocessor",
+        "signals": [
+            ("third_party_ai_used", True),
+            ("dpa_addresses_ai_subprocessors", False),
+        ],
+        "require_explicit_false": True,
+        "severity": "medium",
+        "message": (
+            "Vendor uses third-party AI services but does not "
+            "list them in sub-processor documentation."
+        ),
+    },
+]
+
+# All agent red flags combined
+AGENT_RED_FLAGS: list[dict] = SOC2_RED_FLAGS + ISO_RED_FLAGS + AI_RED_FLAGS
+
+
+def _check_agent_red_flag(flag: dict, signals: dict) -> bool:
+    """Check if an agent red flag condition is met."""
+    for sig_name, expected in flag.get("signals", []):
+        val = signals.get(sig_name)
+        if flag.get("require_explicit_false") and expected is False:
+            # Must be explicitly False, not None/absent
+            if val is not False:
+                return False
+        elif expected is True:
+            if val is not True:
+                return False
+        elif isinstance(expected, str):
+            if val != expected:
+                return False
+        elif expected is False:
+            if val is True:
+                return False
+    return True
+
+
+def scan_agent_red_flags(
+    agent_signals: dict,
+) -> list[dict]:
+    """Scan agent signals for red flag conditions.
+
+    Returns list of {"name", "severity", "message"} dicts.
+    """
+    hits = []
+    for flag in AGENT_RED_FLAGS:
+        if _check_agent_red_flag(flag, agent_signals):
+            hits.append({
+                "name": flag["name"],
+                "severity": flag["severity"],
+                "message": flag["message"],
+            })
+    return hits
+
+
+def _apply_agent_modifiers(
+    agent_signals: dict,
+    base_scores: dict[str, int],
+) -> dict[str, float]:
+    """Calculate per-dimension modifier totals from agent signals.
+
+    Returns {"D2": 0.5, "D5": 0.3, ...} — additive modifiers.
+    Handles None (NULL) gracefully: None signals contribute nothing.
+    """
+    mods: dict[str, float] = {}
+
+    # Check if ISO evidence is invalidated
+    iso_invalidated = any(
+        agent_signals.get(s) is True
+        for s in ISO_INVALIDATION_SIGNALS
+    )
+
+    # SOC 2 simple modifiers
+    soc2_multiplier = 1.0
+    for mult_signal, mult_val in SOC2_MULTIPLIERS.items():
+        # Check derived currency_status for stale
+        if mult_signal == "currency_status_stale":
+            if agent_signals.get("currency_status") == "stale":
+                soc2_multiplier = min(soc2_multiplier, mult_val)
+        elif mult_signal == "soc2_type1_only":
+            if (agent_signals.get("soc2_type1_present") is True
+                    and agent_signals.get("soc2_type2_present") is not True):
+                soc2_multiplier = min(soc2_multiplier, mult_val)
+        elif agent_signals.get(mult_signal) is True:
+            soc2_multiplier = min(soc2_multiplier, mult_val)
+
+    for sig_name, dim_weights in SOC2_MODIFIERS.items():
+        val = agent_signals.get(sig_name)
+        if val is None:
+            continue
+        if val is True or (isinstance(val, str) and val):
+            for dim, weight in dim_weights.items():
+                applied = weight * soc2_multiplier if weight > 0 else weight
+                mods[dim] = mods.get(dim, 0.0) + applied
+
+    # SOC 2 compound modifiers
+    for compound in SOC2_COMPOUND_MODIFIERS:
+        met = True
+        for sig_name, expected in compound["requires"]:
+            val = agent_signals.get(sig_name)
+            if val is None:
+                met = False
+                break
+            if isinstance(expected, bool):
+                if val is not expected:
+                    met = False
+                    break
+            elif isinstance(expected, str):
+                # Allow prefix match for currency: "current" matches "current_recent"
+                if expected == "current" and isinstance(val, str):
+                    if not val.startswith("current"):
+                        met = False
+                        break
+                elif val != expected:
+                    met = False
+                    break
+        if met:
+            for dim, weight in compound["modifiers"].items():
+                applied = weight * soc2_multiplier
+                mods[dim] = mods.get(dim, 0.0) + applied
+
+    # ISO modifiers (skip if invalidated)
+    if not iso_invalidated:
+        iso_multiplier = 1.0
+        for mult_signal, mult_val in ISO_MULTIPLIERS.items():
+            if agent_signals.get(mult_signal) is True:
+                iso_multiplier = min(iso_multiplier, mult_val)
+
+        for sig_name, dim_weights in ISO_MODIFIERS.items():
+            val = agent_signals.get(sig_name)
+            if val is None or val is False:
+                continue
+            if val is True:
+                for dim, weight in dim_weights.items():
+                    applied = weight * iso_multiplier
+                    mods[dim] = mods.get(dim, 0.0) + applied
+
+        # ISO compound modifiers
+        for compound in ISO_COMPOUND_MODIFIERS:
+            met = True
+            for sig_name, expected in compound["requires"]:
+                val = agent_signals.get(sig_name)
+                if val is None:
+                    met = False
+                    break
+                if isinstance(expected, bool) and val is not expected:
+                    met = False
+                    break
+                if isinstance(expected, str):
+                    if expected.startswith("current") and isinstance(val, str):
+                        if not val.startswith("current"):
+                            met = False
+                            break
+                    elif val != expected:
+                        met = False
+                        break
+            # Extra condition: major_nonconformities == 0
+            if met and compound.get("extra_condition") == "iso_27001_major_nonconformities_zero":
+                nc = agent_signals.get("iso_27001_major_nonconformities")
+                if nc is None or (isinstance(nc, int) and nc > 0):
+                    met = False
+            if met:
+                for dim, weight in compound["modifiers"].items():
+                    applied = weight * iso_multiplier
+                    mods[dim] = mods.get(dim, 0.0) + applied
+
+    # AI D6 simple modifiers
+    for sig_name, weight in AI_D6_MODIFIERS.items():
+        val = agent_signals.get(sig_name)
+        if val is True:
+            mods["D6"] = mods.get("D6", 0.0) + weight
+
+    # AI D6 compound positive modifiers
+    for compound in AI_D6_COMPOUND_MODIFIERS:
+        met = True
+        for sig_name, expected in compound["requires"]:
+            val = agent_signals.get(sig_name)
+            if compound.get("require_explicit_false") and expected is False:
+                if val is not False:
+                    met = False
+                    break
+            elif isinstance(expected, bool):
+                if val is not expected:
+                    met = False
+                    break
+            elif isinstance(expected, str):
+                if val != expected:
+                    met = False
+                    break
+        if met:
+            mods["D6"] = mods.get("D6", 0.0) + compound["modifier"]
+
+    # AI D6 negative modifiers
+    for neg in AI_D6_NEGATIVE_MODIFIERS:
+        met = True
+        for sig_name, expected in neg["requires"]:
+            val = agent_signals.get(sig_name)
+            if neg.get("require_explicit_false") and expected is False:
+                if val is not False:
+                    met = False
+                    break
+            elif isinstance(expected, bool):
+                if val is not expected:
+                    met = False
+                    break
+            elif isinstance(expected, str):
+                if val != expected:
+                    met = False
+                    break
+        if met:
+            mods["D6"] = mods.get("D6", 0.0) + neg["modifier"]
+
+    # Cap total modifier per dimension at ±1.0
+    # (per EVIDENCE_HIERARCHY.md: "capped at a max of +1.0")
+    for dim in mods:
+        mods[dim] = max(-1.5, min(1.0, mods[dim]))
+
+    return mods
+
+
+def _apply_agent_ceilings(
+    agent_signals: dict,
+    scores: dict[str, int],
+    cap_reasons: dict[str, list[str]],
+) -> None:
+    """Apply hard score ceilings from agent signals.
+
+    Mutates scores and cap_reasons in place.
+    """
+    # SOC 2 ceilings
+    opinion = agent_signals.get("opinion_type")
+    if opinion == "adverse" or opinion == "disclaimer":
+        ceiling_key = f"opinion_type_{opinion}"
+        ceil_info = SOC2_CEILINGS.get(ceiling_key, {})
+        for dim, max_score in ceil_info.items():
+            if scores.get(dim, 0) > max_score:
+                cap_reasons[dim].append(
+                    f"SOC 2 {opinion} opinion → {dim} ceiling {max_score}"
+                )
+                scores[dim] = max_score
+
+    # AI D6 ceilings
+    for ceiling in AI_D6_CEILINGS:
+        met = True
+        for sig_name, expected in ceiling["requires"]:
+            val = agent_signals.get(sig_name)
+            if isinstance(expected, bool):
+                # For False requirements, must be explicitly False
+                if expected is False and val is not False:
+                    met = False
+                    break
+                if expected is True and val is not True:
+                    met = False
+                    break
+        # Special: "all null check" — all AI signals except is_ai_vendor are None
+        if met and ceiling.get("all_null_check"):
+            ai_signal_names = list(AI_D6_MODIFIERS.keys()) + [
+                "trains_on_customer_data", "opt_out_available",
+                "fine_tunes_on_customer_data",
+                "uses_customer_data_for_inference",
+            ]
+            has_any = any(
+                agent_signals.get(s) is not None
+                for s in ai_signal_names
+            )
+            if has_any:
+                met = False
+        # Extra false check
+        if met and ceiling.get("extra_false"):
+            for sig in ceiling["extra_false"]:
+                if agent_signals.get(sig) is not False:
+                    met = False
+                    break
+        if met:
+            max_score = ceiling["max_score"]
+            if scores.get("D6", 0) > max_score:
+                cap_reasons["D6"].append(ceiling["label"])
+                scores["D6"] = max_score
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Scoring engine
 # ─────────────────────────────────────────────────────────────────────
 
@@ -1120,6 +1886,7 @@ def score_vendor(
     auto_escalate_triggers: list[dict] | None = None,
     assessment_scope: str = "public_policy_only",
     dpa_available: bool = True,
+    agent_signals: dict | None = None,
 ) -> AssessmentResult:
     """Run the full deterministic scoring pipeline.
 
@@ -1142,14 +1909,22 @@ def score_vendor(
         List of trigger dicts from config ``auto_escalate`` list.
         Checked after scoring; sets ``escalation_required`` and
         ``escalation_reasons`` on the returned result.
+    agent_signals:
+        Flat dict of signals from specialist agents (AI Bandit, Audit
+        Bandit).  Uses exact signal names from the rubric reference
+        documents.  Applied as modifiers after framework evidence.
     """
     framework_evidence = framework_evidence or []
+    agent_signals = agent_signals or {}
 
-    # 1. Red-flag scan
+    # 1. Red-flag scan (text-based)
     rf_hits = scan_red_flags(extracted_text) if extracted_text else []
     rf_ceilings = red_flag_ceilings(rf_hits)
 
-    # 2. Score each dimension (raw)
+    # 1b. Agent signal red flags
+    agent_rf_hits = scan_agent_red_flags(agent_signals) if agent_signals else []
+
+    # 2. Score each dimension (raw — from level-walk)
     raw_scores: dict[str, tuple[int, str, list[str], list[str]]] = {}
     for dim_key in RUBRIC:
         dim_ev = evidence.get(dim_key, {})
@@ -1164,7 +1939,15 @@ def score_vendor(
             modifier += FRAMEWORK_MODIFIERS.get(fw, {}).get(dim_key, 0.0)
         modified_raw[dim_key] = min(5, int(base + modifier))
 
-    # 4. Apply red-flag ceilings
+    # 3b. Apply agent signal modifiers (from rubric reference documents)
+    if agent_signals:
+        agent_mods = _apply_agent_modifiers(agent_signals, modified_raw)
+        for dim_key in RUBRIC:
+            if dim_key in agent_mods:
+                new_score = modified_raw[dim_key] + agent_mods[dim_key]
+                modified_raw[dim_key] = max(1, min(5, int(round(new_score))))
+
+    # 4. Apply red-flag ceilings (text-based)
     after_rf: dict[str, int] = {}
     cap_reasons: dict[str, list[str]] = {k: [] for k in RUBRIC}
     for dim_key in RUBRIC:
@@ -1176,7 +1959,7 @@ def score_vendor(
             score = rf_ceilings[dim_key]
         after_rf[dim_key] = score
 
-    # 4b. Signal-based ceilings (from specialist agents)
+    # 4b. Signal-based ceilings (legacy d6_/d8_ prefixed signals)
     d6_ev = evidence.get("D6", {})
     if d6_ev.get("d6_trains_without_consent"):
         if after_rf.get("D6", 5) > 2:
@@ -1198,6 +1981,10 @@ def score_vendor(
                 "DPA conflicts with audit evidence → ceiling 3"
             )
             after_rf["D8"] = 3
+
+    # 4c. Agent signal ceilings (from rubric reference documents)
+    if agent_signals:
+        _apply_agent_ceilings(agent_signals, after_rf, cap_reasons)
 
     # 5. Apply D8 dependency ceiling on D2, D5, D7
     d8_score = after_rf["D8"]
@@ -1302,7 +2089,7 @@ def score_vendor(
         dimensions=dim_results,
         weighted_average=weighted_avg,
         risk_tier=risk,
-        red_flags=rf_hits,
+        red_flags=rf_hits + agent_rf_hits,
         framework_evidence=framework_evidence,
         escalation_required=escalation_required,
         escalation_reasons=escalation_reasons,
