@@ -225,11 +225,16 @@ def print_assessment(assessment, *, verbose: bool = False) -> None:
     if result.red_flags:
         rf_text = Text()
         for rf in result.red_flags:
-            dims = ", ".join(rf["dims"])
+            # Agent red flags use "name"/"message"/"severity"; text red flags
+            # use "dims"/"label"/"match". Handle both shapes.
+            dims_list = rf.get("dims", [])
+            dims = ", ".join(dims_list) if dims_list else "—"
+            label = rf.get("label") or rf.get("name", "")
+            match = rf.get("match") or rf.get("message") or ""
             rf_text.append(f"\n  ⚠  [{dims}]  ", style="color(220)")
-            rf_text.append(rf["label"] + "\n", style="bold color(220)")
-            match = rf["match"][:80]
-            rf_text.append(f'       "{match}"\n', style="dim color(238)")
+            rf_text.append(label + "\n", style="bold color(220)")
+            if match:
+                rf_text.append(f'       "{match[:80]}"\n', style="dim color(238)")
 
         console.print(Panel(
             rf_text,
