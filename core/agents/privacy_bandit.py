@@ -270,6 +270,7 @@ class PrivacyBandit(BaseBandit):
         ready_docs: list = []
         all_doc_signals: dict = {}
         signal_sources: dict = {}
+        agent_signals: dict = {}
 
         if docs_folder:
             from core.documents.ingestor import DocumentIngestor
@@ -599,7 +600,6 @@ class PrivacyBandit(BaseBandit):
         # ── Phase 5/6: AI Bandit + Audit Bandit ─────────────────────────
         ai_result = None
         audit_result = None
-        agent_signals: dict = {}  # un-prefixed signals for rubric modifiers
 
         if ready_docs:
             # Build AgentDocument list from ready_docs
