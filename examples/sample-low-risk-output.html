@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bandit — Acme Cloud Services</title>
+<style>
+:root{--cr:#F4EFE4;--br:#8B5A2B;--ink:#1A1510;--mu:#6B5B4E;--bd:#D4C9B8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'SF Mono','Fira Code','Cascadia Code','Courier New',monospace;
+  font-size:13px;line-height:1.65;max-width:1040px;margin:0 auto;
+  padding:40px 24px 80px;color:var(--ink);background:var(--cr)}
+a{color:var(--br);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Header ── */
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;
+  border-bottom:2px solid var(--br);padding-bottom:20px;margin-bottom:16px;flex-wrap:wrap}
+.brand{color:var(--br);font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:6px}
+.vn{font-size:22px;font-weight:700;margin-bottom:10px}
+.meta{font-size:12px;color:var(--mu);line-height:2}
+.tb{display:inline-block;padding:4px 14px;border-radius:3px;font-weight:700;
+  font-size:13px;letter-spacing:.06em;margin-bottom:8px;color:#fff}
+.sb{font-size:32px;font-weight:700}.sd{font-size:16px;color:var(--mu)}
+
+/* ── Stats bar ── */
+.stats-bar{font-size:11px;color:var(--mu);margin-bottom:24px;display:flex;
+  flex-wrap:wrap;gap:6px;align-items:center}
+.sep{color:var(--bd)}
+
+/* ── Section headings ── */
+h2{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--br);border-bottom:1px solid var(--bd);padding-bottom:6px;
+  margin:32px 0 12px}
+
+/* ── Collapsible dimensions ── */
+.dim-det{border:1px solid var(--bd);border-radius:4px;margin-bottom:6px}
+.dim-sum{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  cursor:pointer;list-style:none;background:rgba(139,90,43,.04);
+  border-radius:4px;user-select:none}
+.dim-sum::-webkit-details-marker{display:none}
+.dk-lbl{font-weight:700;color:var(--br);min-width:52px;flex-shrink:0}
+.dn-lbl{flex:1;color:var(--ink)}
+.bar-cell{flex-shrink:0}
+.ds-lbl{width:36px;text-align:right;font-weight:700;flex-shrink:0}
+.dl-lbl{width:110px;font-size:11px;flex-shrink:0}
+.arr{margin-left:auto;font-size:9px;color:var(--mu);transition:transform .15s;flex-shrink:0}
+details[open] .arr{transform:rotate(90deg)}
+.dim-body{padding:12px 16px 16px}
+.dim-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:640px){.dim-grid{grid-template-columns:1fr}}
+
+/* ── Sub-sections ── */
+.sub-sec{margin-top:16px}
+.sh{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--br);margin-bottom:8px}
+.ev-list{list-style:none;padding:0}
+.ev-list li{padding:3px 0;font-size:12px}
+.ev-y{color:#1A5C2A}
+.ev-n{color:#7A5500}
+.none-p{color:var(--mu);font-style:italic;font-size:12px}
+
+/* ── Red flags (in dimension) ── */
+.rf-sec{background:rgba(139,26,26,.05);border-left:3px solid #8B1A1A;
+  padding:10px 12px;border-radius:0 4px 4px 0}
+.rf-item{display:flex;gap:10px;margin-bottom:10px}
+.rf-item:last-child{margin-bottom:0}
+.rf-sym{color:#8B1A1A;font-size:15px;flex-shrink:0}
+.rf-q{color:#5A1A1A;font-style:italic;font-size:12px;margin-bottom:3px}
+.rf-l{font-weight:700;color:#8B1A1A;font-size:11px}
+.rf-c{color:var(--mu);font-size:11px}
+
+/* ── Vendor questions ── */
+.q-list{list-style:none;padding:0}
+.q-list li{padding:5px 0 5px 12px;border-left:2px solid var(--bd);
+  margin-bottom:4px;font-size:12px;color:var(--ink)}
+
+/* ── Contract recommendation ── */
+.cr-box{background:#E8F0FE;border:1px solid #B0C8F8;border-radius:4px;
+  padding:10px 14px;color:#1A2A5A;font-style:italic;line-height:1.7;font-size:12px}
+
+/* ── Frameworks / Sources tables ── */
+.fw-list{list-style:none;padding:0}
+.fw-list li{padding:5px 0;border-bottom:1px solid var(--bd);color:#1A5C2A}
+.cert-badge{display:inline-block;padding:4px 12px;border-radius:3px;
+  background:#E8F5EC;color:#1A5C2A;font-weight:700;font-size:12px;
+  margin:3px 4px 3px 0;border:1px solid #B8DDBE}
+table{width:100%;border-collapse:collapse}
+td,th{padding:7px 10px;border-bottom:1px solid var(--bd);vertical-align:top;text-align:left;font-size:12px}
+th{background:rgba(139,90,43,.07);font-weight:700;font-size:9px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--br)}
+
+/* ── Team summary ── */
+.team-wrap{margin-top:8px}
+.tp{display:block;width:100%;border:1px solid var(--bd);border-radius:4px;overflow:hidden;margin-bottom:16px}
+.tp-hdr{padding:8px 14px;font-size:9px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:#fff}
+.tp-body{padding:12px 14px}
+.tp-row{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd);
+  align-items:flex-start}
+.tp-k{font-size:10px;color:var(--mu);min-width:120px;flex-shrink:0;padding-top:1px}
+.tp-v{font-size:12px;flex:1}
+.tp-gap{margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)}
+.lc-item{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.lc-item:last-child{margin-bottom:0;border-bottom:none}
+.lc-hdr{font-size:11px;font-weight:700;color:var(--br);margin-bottom:5px}
+.lc-body{font-style:italic;color:#1A2A5A;background:#E8F0FE;padding:8px 10px;
+  border-radius:3px;font-size:11px;line-height:1.6}
+.sec-req{color:#2A4A7A;font-size:11px;padding:3px 0}
+.sec-flag{color:#8B1A1A;font-size:11px;padding:2px 0}
+
+/* ── Email template ── */
+.email-det{border:1px solid var(--bd);border-radius:4px;margin-top:32px}
+.email-sum{padding:12px 16px;cursor:pointer;font-size:10px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--br);
+  background:rgba(139,90,43,.04);list-style:none;display:flex;
+  justify-content:space-between}
+.email-sum::-webkit-details-marker{display:none}
+.email-sum::after{content:"▶";font-size:9px;color:var(--mu);transition:transform .15s}
+details[open] .email-sum::after{transform:rotate(90deg)}
+.email-body{padding:16px}
+.email-body pre{white-space:pre-wrap;font-size:12px;line-height:1.75;
+  color:var(--ink);background:var(--cr)}
+
+/* ── Escalation banner ── */
+.esc-banner{background:#3D0000;border:2px solid #8B1A1A;border-radius:5px;
+  padding:18px 22px;margin-bottom:28px}
+.esc-title{font-size:14px;font-weight:700;color:#FF6B6B;letter-spacing:.04em;margin-bottom:6px}
+.esc-detail{font-size:12px;color:#F4C5C5;margin-bottom:10px}
+.esc-reasons{list-style:none;padding:0;margin:0}
+.esc-reasons li{font-size:12px;color:#F4C5C5;padding:2px 0}
+.esc-reasons li::before{content:"⚠  ";color:#FF6B6B}
+
+/* ── Scope bar ── */
+.scope-bar{font-size:11px;color:var(--mu);margin-bottom:20px;padding:8px 12px;
+  background:rgba(139,90,43,.05);border-radius:3px;border:1px solid var(--bd);
+  line-height:1.8}
+.scope-excl{color:#8B6A3A;font-weight:700}
+.scope-part{color:#8B6A3A}
+
+/* ── Excluded dimension ── */
+.dim-excl{background:rgba(0,0,0,.02);border-color:var(--bd)}
+.dim-excl .dim-sum{background:none;opacity:.7}
+.excl-body{padding:16px 18px;font-size:12px;color:var(--mu);line-height:1.8}
+.excl-cmd{background:var(--cr);border:1px solid var(--bd);border-radius:3px;
+  padding:6px 10px;font-family:'Courier New',monospace;font-size:12px;
+  color:var(--br);display:inline-block;margin-top:6px}
+
+/* ── Partially assessed note ── */
+.pa-note{margin-top:12px;padding:7px 10px;background:rgba(139,90,43,.06);
+  border-radius:3px;border-left:3px solid #C8901C;font-size:11px;color:#7A5500}
+
+/* ── Profile line ── */
+.prof-line{font-size:11px;color:var(--br);margin-top:4px}
+.prof-wt{font-size:10px;color:var(--mu);margin-top:2px;letter-spacing:.02em}
+
+/* ── Footer ── */
+.footer{margin-top:56px;padding-top:14px;border-top:1px solid var(--bd);
+  font-size:11px;color:var(--mu);display:flex;justify-content:space-between;
+  flex-wrap:wrap;gap:8px}
+
+/* ── Print ── */
+@media print{
+  details > *:not(summary){display:block !important}
+  .dim-det, .email-det{page-break-inside:avoid}
+  .tp{margin-bottom:12px}
+}
+</style>
+</head>
+<body>
+
+
+
+
+<div class="hdr">
+  <div>
+    <div class="brand">Bandit · Privacy Risk Assessment</div>
+    <div class="vn">Acme Cloud Services</div>
+    <div class="prof-line">Profile: Technology / SaaS · United States, European Union / EEA · GDPR · UK GDPR</div><div class="prof-wt">D1 ×1.3 · D3 ×1.8 · D4 ×3.0 · D5 ×1.5 · D8 ×2.0</div>
+    <div class="meta">Assessed: 2026-04-30 16:59 UTC&nbsp;·&nbsp;Rubric v1.0.0</div>
+  </div>
+  <div style="text-align:right">
+    <div><span class="tb" style="background:#D4A017">MEDIUM RISK</span></div>
+    <div><span class="sb" style="color:#D4A017">3.1</span><span class="sd"> / 5.0</span></div>
+  </div>
+</div>
+
+<div class="stats-bar"><span>8 dimensions</span><span class="sep">·</span><span style="color:#C0392B;font-weight:700">4 high-risk</span><span class="sep">·</span><span style="color:#D4A017;font-weight:700">1 deficient</span><span class="sep">·</span><span>2 red flags</span><span class="sep">·</span><span>1 page analysed</span></div>
+<div class="scope-bar"><span>Assessment scope: Privacy policy + 4 document(s)</span><span class="sep">·</span><span class="scope-part">📄 acme-soc2-summary.txt, acme-dpa.txt, acme-privacy-policy.txt, acme-iso-certificates.txt</span></div>
+
+<h2>Dimension Scores</h2>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D1 <span style="color:#8B5A2B;font-size:10px">×1.3</span></span>
+    <span class="dn-lbl">Data Minimization</span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:100%;height:7px;background:#27AE60;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#27AE60">5/5</span>
+    <span class="dl-lbl" style="color:#27AE60">Gold standard</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; Categories explicitly linked to specific purposes</li><li class="ev-y">✓&nbsp; Category-specific retention schedules documented</li><li class="ev-y">✓&nbsp; Automated data minimization controls in place</li><li class="ev-y">✓&nbsp; Privacy by design approach documented</li><li class="ev-y">✓&nbsp; Periodic data review cycle established</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><p class="none-p">No gaps — dimension is fully evidenced.</p></div></div>
+      <div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D2</span>
+    <span class="dn-lbl">Sub-processor Management <span style="color:#8B1A1A;font-size:10px;font-weight:700">[Contract ↓ from Policy 3/5]</span></span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:40%;height:7px;background:#E07832;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#E07832">2/5</span>
+    <span class="dl-lbl" style="color:#E07832">Minimum compliant</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; Sub-processor list exists</li><li class="ev-y">✓&nbsp; General authorization with change notification</li><li class="ev-y">✓&nbsp; Contractual obligations flow to sub-processors</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; Published sub-processor list with locations and roles</li><li class="ev-n">✗&nbsp; Defined advance notification period for changes</li><li class="ev-n">✗&nbsp; Objection right with termination option</li><li class="ev-n">✗&nbsp; Audit rights extend to sub-processors</li><li class="ev-n">✗&nbsp; Sub-processor compliance evidence available on request</li><li class="ev-n">✗&nbsp; Full liability retained per Art. 28(4)</li><li class="ev-n">✗&nbsp; Sub processor controls audited</li><li class="ev-n">✗&nbsp; Third party audit clean</li></ul></div><div class="sub-sec"><h4 class="sh">Contract language</h4><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Sub-processor management<span style="color:#8B5A2B;font-size:10px"> — §3.4, §4.1–4.3</span></div><div style="font-style:italic">&ldquo;Acme shall not engage a new sub-processor without providing Customer with 30 days' prior written notice. Customer has the right to object to any new sub-processor appointment on reasonable grounds wit…&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div></div></div>
+      <div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>Can you provide your current sub-processor list including each sub-processor's country of operation and data categories processed?</li><li>How much advance notice do you provide before adding or replacing a sub-processor, and how is that notice delivered?</li><li>If we object to a new sub-processor, what is the process and can we terminate without penalty if the objection is not resolved?</li></ul></div><div class="sub-sec"><h4 class="sh">Contract recommendation</h4><div class="cr-box">Add to DPA §[Sub-processors]: "Processor shall maintain and publish a list of all Sub-processors, including name, country of processing, and processing activity. Processor shall provide Controller with at least 30 days' written notice before adding or replacing any Sub-processor. Controller may object in writing within that period; if Processor cannot accommodate the objection, Controller may terminate the Agreement without penalty. Processor remains fully liable for the acts of its Sub-processors per GDPR Art. 28(4)."</div></div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D3 <span style="color:#8B5A2B;font-size:10px">×1.8</span></span>
+    <span class="dn-lbl">Data Subject Rights</span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:80%;height:7px;background:#6AAA40;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#6AAA40">4/5</span>
+    <span class="dl-lbl" style="color:#6AAA40">Strong</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; All GDPR Chapter III rights explicitly listed</li><li class="ev-y">✓&nbsp; Contact details provided for privacy requests</li><li class="ev-y">✓&nbsp; Response timeline stated</li><li class="ev-y">✓&nbsp; DSAR handling procedure documented <span style="color:#8B5A2B;font-size:10px">← acme-dpa.txt</span></li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; CCPA/CPRA rights listed</li><li class="ev-n">✗&nbsp; Measurable SLA targets for DSAR response</li><li class="ev-n">✗&nbsp; Automated DSAR intake and workflow</li><li class="ev-n">✗&nbsp; Identity verification process documented</li></ul></div></div>
+      <div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>How do you support CCPA rights — access, deletion, opt-out of sale, and correction — for California residents?</li><li>What percentage of DSARs do you fulfill within the regulatory deadline? Do you track and report DSAR metrics?</li><li>Is your DSAR process manual or automated? What tooling supports it?</li></ul></div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D4 <span style="color:#8B5A2B;font-size:10px">×3.0</span></span>
+    <span class="dn-lbl">Cross-Border Transfer Mechanisms</span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:80%;height:7px;background:#6AAA40;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#6AAA40">4/5</span>
+    <span class="dl-lbl" style="color:#6AAA40">Strong</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; Transfer mechanism identified (SCCs / DPF / adequacy)</li><li class="ev-y">✓&nbsp; Applicable SCC module specified</li><li class="ev-y">✓&nbsp; Transfer Impact Assessment (TIA) documented</li><li class="ev-y">✓&nbsp; Sub-processor processing locations disclosed</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; Supplementary technical measures documented</li><li class="ev-n">✗&nbsp; Process for monitoring adequacy decision changes</li><li class="ev-n">✗&nbsp; Notification of transfer mechanism changes committed</li></ul></div></div>
+      <div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>What supplementary technical measures do you apply to data transferred outside the EEA (e.g. encryption, pseudonymisation)?</li><li>How do you monitor changes to EU adequacy decisions or SCC requirements that could affect our transfers?</li></ul></div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D5 <span style="color:#8B5A2B;font-size:10px">×1.5</span></span>
+    <span class="dn-lbl">Breach Notification <span style="color:#8B1A1A;font-size:10px;font-weight:700">[Contract ↓ from Policy 3/5]</span></span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:40%;height:7px;background:#E07832;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#E07832">2/5</span>
+    <span class="dl-lbl" style="color:#E07832">Minimum compliant</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; Notification obligation stated</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; Specific notification timeline committed</li><li class="ev-n">✗&nbsp; Art. 33(3) notification content committed (nature, numbers, consequences, measures)</li><li class="ev-n">✗&nbsp; Named incident response lead identified</li><li class="ev-n">✗&nbsp; Breach procedures audited</li><li class="ev-n">✗&nbsp; Covers suspected (not just confirmed) incidents</li><li class="ev-n">✗&nbsp; Evidence preservation committed</li><li class="ev-n">✗&nbsp; Phased reporting per Art. 33(4) supported</li><li class="ev-n">✗&nbsp; Awareness trigger clearly defined</li><li class="ev-n">✗&nbsp; Sub-processor breach notification cascade addressed</li></ul></div><div class="sub-sec"><h4 class="sh">Contract language</h4><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Breach notification<span style="color:#8B5A2B;font-size:10px"> — §6.1, §6.2, §6.3</span></div><div style="font-style:italic">&ldquo;Acme shall notify Customer without undue delay and in any event within 48 hours of becoming aware of a Personal Data breach. Notification shall include: nature of the breach; categories and approximat…&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div></div></div>
+      <div><div class="sub-sec rf-sec"><h4 class="sh">Red flags triggered</h4><div class="rf-item"><div class="rf-sym">⚠</div><div><div class="rf-q">&ldquo;without undue delay&rdquo;</div><div class="rf-l">No operational SLA beyond GDPR verbatim</div><div class="rf-c">→ Score capped at 3/5</div></div></div></div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>What is your committed timeline for notifying us of a personal data breach affecting our data?</li><li>Can you confirm your breach notifications will include all Art. 33(3) elements — nature of breach, data categories and volumes, likely consequences, and measures taken?</li><li>Who is your designated incident response lead, and how do we contact them in an emergency?</li></ul></div><div class="sub-sec"><h4 class="sh">Contract recommendation</h4><div class="cr-box">Add to DPA §[Breach Notification]: "Processor shall notify Controller within 24 hours of becoming aware of a confirmed or reasonably suspected Personal Data Breach affecting Controller Data. The initial notification shall include, to the extent then known, all information required under GDPR Art. 33(3): the nature of the breach, categories and approximate number of data subjects and records affected, likely consequences, and measures taken or proposed. Processor shall provide updates as further information becomes available and shall preserve all forensic evidence for a minimum of 12 months."</div></div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D6 <span style="color:#8B5A2B;font-size:10px">×1.5</span></span>
+    <span class="dn-lbl">AI/ML Data Usage</span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:60%;height:7px;background:#D4A017;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#D4A017">3/5</span>
+    <span class="dl-lbl" style="color:#D4A017">Minimum compliant</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; AI/ML usage mentioned</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; AI/ML training disclosed as distinct purpose</li><li class="ev-n">✗&nbsp; Legal basis for AI/ML processing identified</li><li class="ev-n">✗&nbsp; Data categories used for AI training specified</li><li class="ev-n">✗&nbsp; Opt-out is prominent and accessible</li><li class="ev-n">✗&nbsp; Customer data segregated from training pool</li><li class="ev-n">✗&nbsp; AI training data retention schedule defined</li><li class="ev-n">✗&nbsp; DPA contains explicit AI/ML restriction clause</li><li class="ev-n">✗&nbsp; Opt-in (not just opt-out) required for AI training</li><li class="ev-n">✗&nbsp; Training data provenance documented</li><li class="ev-n">✗&nbsp; Algorithmic disgorgement readiness (FTC precedent)</li><li class="ev-n">✗&nbsp; EU AI Act Art. 53 compliance addressed</li><li class="ev-n">✗&nbsp; Bias and fairness mitigation documented</li><li class="ev-n">✗&nbsp; Model update and policy review cadence stated</li></ul></div></div>
+      <div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>Do you use our data to train AI or ML models? If so, is this disclosed as a separate processing purpose with its own legal basis?</li><li>What legal basis do you rely on for processing our data for AI/ML training purposes?</li><li>Which specific categories of our data are used to train or improve AI models?</li></ul></div><div class="sub-sec"><h4 class="sh">Contract recommendation</h4><div class="cr-box">Add to DPA §[AI and Machine Learning]: "Processor shall not use Controller Data to train, fine-tune, evaluate, or improve any AI or machine learning model without Controller's prior written consent. Where AI/ML processing is separately agreed in writing, Processor shall identify the specific data categories used, the applicable legal basis, and shall provide a prominent opt-out mechanism. Processor shall delete or irreversibly anonymise Controller Data from all training datasets within 30 days of termination, and shall provide written certification of deletion on request."</div></div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D7</span>
+    <span class="dn-lbl">Retention &amp; Deletion <span style="color:#8B1A1A;font-size:10px;font-weight:700">[Contract ↓ from Policy 4/5]</span></span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:40%;height:7px;background:#E07832;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#E07832">2/5</span>
+    <span class="dl-lbl" style="color:#E07832">Strong</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; Category-specific retention schedules defined</li><li class="ev-y">✓&nbsp; Specific deletion timeframe defined</li><li class="ev-y">✓&nbsp; Deletion certification provided on request</li><li class="ev-y">✓&nbsp; Backup copies addressed in deletion process</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; General retention period stated</li><li class="ev-n">✗&nbsp; Deletion at contract termination committed</li><li class="ev-n">✗&nbsp; Derived and aggregated data addressed</li><li class="ev-n">✗&nbsp; AI training data retention separately addressed</li><li class="ev-n">✗&nbsp; Sub-processor deletion obligations included</li><li class="ev-n">✗&nbsp; Periodic retention review cycle documented</li><li class="ev-n">✗&nbsp; Deletion controls audited</li></ul></div><div class="sub-sec"><h4 class="sh">Contract language</h4><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Deletion or return on termination<span style="color:#8B5A2B;font-size:10px"> — §3.6</span></div><div style="font-style:italic">&ldquo;Acme shall, at Customer's election, delete or return all Personal Data upon termination of the Services, and delete existing copies unless applicable law requires storage. Deletion shall be confirmed …&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div></div></div>
+      <div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>What are your general data retention periods, and what triggers the start of the retention clock?</li><li>What is your standard process for deleting or returning our data at contract end?</li><li>How do you handle deletion of data derived or aggregated from our data — including analytics outputs and model weights?</li></ul></div><div class="sub-sec"><h4 class="sh">Contract recommendation</h4><div class="cr-box">Add to DPA §[Retention and Deletion]: "Upon expiry or termination of the Agreement, Processor shall, at Controller's election, securely delete or return all Controller Personal Data within 30 days, including all copies held by Sub-processors. Data in backup systems shall be purged within the next scheduled backup rotation cycle, and in any event within 90 days. Processor shall provide written certification of deletion within 10 business days of completion. Processor shall maintain a documented, category-specific retention schedule and provide a copy to Controller on request."</div></div></div>
+    </div>
+  </div>
+</details>
+
+<details class="dim-det">
+  <summary class="dim-sum">
+    <span class="dk-lbl">D8 <span style="color:#8B5A2B;font-size:10px">×2.0</span></span>
+    <span class="dn-lbl">DPA Completeness <span style="color:#8B1A1A;font-size:10px;font-weight:700">[Contract ↓ from Policy 3/5]</span></span>
+    <span class="bar-cell"><div style="width:72px;height:7px;background:#D4C9B8;border-radius:3px;display:inline-block;vertical-align:middle"><div style="width:40%;height:7px;background:#E07832;border-radius:3px"></div></div></span>
+    <span class="ds-lbl" style="color:#E07832">2/5</span>
+    <span class="dl-lbl" style="color:#E07832">Minimum compliant</span>
+    <span class="arr">▶</span>
+  </summary>
+  <div class="dim-body">
+    <div class="dim-grid">
+      <div><div class="sub-sec"><h4 class="sh">Evidence found</h4><ul class="ev-list"><li class="ev-y">✓&nbsp; Most Art. 28(3) provisions present</li></ul></div><div class="sub-sec"><h4 class="sh">Gaps identified</h4><ul class="ev-list"><li class="ev-n">✗&nbsp; All Art. 28(3)(a)–(h) provisions addressed</li><li class="ev-n">✗&nbsp; Processing description annex exists</li><li class="ev-n">✗&nbsp; Detailed processing annex included</li><li class="ev-n">✗&nbsp; Technical and organisational measures in annex</li><li class="ev-n">✗&nbsp; Measurable SLAs included</li><li class="ev-n">✗&nbsp; CCPA service provider provisions included</li><li class="ev-n">✗&nbsp; International transfer mechanisms specified</li><li class="ev-n">✗&nbsp; Independent verification (SOC 2 / ISO 27701)</li><li class="ev-n">✗&nbsp; Independent audit clean</li><li class="ev-n">✗&nbsp; DPA is tailored, not a verbatim template</li><li class="ev-n">✗&nbsp; AI/ML restriction clause in DPA</li><li class="ev-n">✗&nbsp; DPA is version-controlled</li><li class="ev-n">✗&nbsp; Regular compliance reporting committed</li><li class="ev-n">✗&nbsp; Iso27001 current</li><li class="ev-n">✗&nbsp; Iso27701 current</li></ul></div><div class="sub-sec"><h4 class="sh">Contract language</h4><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Processing on documented instructions<span style="color:#8B5A2B;font-size:10px"> — §3.1</span></div><div style="font-style:italic">&ldquo;Acme shall process Personal Data only on documented instructions from Customer, including with regard to transfers of Personal Data to a third country (GDPR Art. 28(3)(a)).&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Confidentiality obligations<span style="color:#8B5A2B;font-size:10px"> — §3.2</span></div><div style="font-style:italic">&ldquo;Acme shall ensure that all personnel authorised to process Personal Data have committed to confidentiality or are under an appropriate statutory obligation of confidentiality.&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Security measures<span style="color:#8B5A2B;font-size:10px"> — §3.3</span></div><div style="font-style:italic">&ldquo;Acme shall implement and maintain the technical and organisational security measures set out in Annex II of this DPA.&rdquo;</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Sub-processor management<span style="color:#8B5A2B;font-size:10px"> — §3.4, §4.1–4.3</span></div><div style="font-style:italic">&ldquo;Acme shall not engage a new sub-processor without providing Customer with 30 days' prior written notice. Customer has the right to object to any new sub-processor appointment on reasonable grounds wit…&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Data subject rights assistance<span style="color:#8B5A2B;font-size:10px"> — §3.5</span></div><div style="font-style:italic">&ldquo;Acme shall assist Customer with data subject rights requests (Art. 15–21), security obligations (Art. 32), breach notifications (Art. 33–34), DPIAs (Art. 35), and prior consultation (Art. 36), taking …&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">DPIA assistance<span style="color:#8B5A2B;font-size:10px"> — §3.5</span></div><div style="font-style:italic">&ldquo;Acme shall assist Customer with data subject rights requests (Art. 15–21), security obligations (Art. 32), breach notifications (Art. 33–34), DPIAs (Art. 35), and prior consultation (Art. 36), taking …&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Deletion or return on termination<span style="color:#8B5A2B;font-size:10px"> — §3.6</span></div><div style="font-style:italic">&ldquo;Acme shall, at Customer's election, delete or return all Personal Data upon termination of the Services, and delete existing copies unless applicable law requires storage. Deletion shall be confirmed …&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div><div style="margin-bottom:8px;padding:8px 10px;background:#F8F5F0;border-left:2px solid #D4C9B8;border-radius:0 3px 3px 0;font-size:11px"><div style="color:#6B5B4E;font-size:10px;margin-bottom:3px">Audit rights<span style="color:#8B5A2B;font-size:10px"> — §3.7</span></div><div style="font-style:italic">&ldquo;Acme shall make available to Customer all information necessary to demonstrate compliance with this DPA, and allow for and contribute to audits (Art. 28(3)(h)). Customer may conduct up to one audit pe…&rdquo;</div><div style="color:#8B1A1A;font-size:10px;margin-top:3px">⚠ Vague — not enforceable</div></div></div></div>
+      <div><div class="sub-sec rf-sec"><h4 class="sh">Red flags triggered</h4><div class="rf-item"><div class="rf-sym">⚠</div><div><div class="rf-q">&ldquo;without undue delay&rdquo;</div><div class="rf-l">No operational SLA beyond GDPR verbatim</div><div class="rf-c">→ Score capped at 3/5</div></div></div></div><div class="sub-sec"><h4 class="sh">Vendor follow-up questions</h4><ul class="q-list"><li>Can you provide a detailed processing annex identifying data types, purposes, storage locations, and access controls?</li><li>Does your DPA include a specific annex detailing your technical and organisational security measures?</li><li>Does your DPA include measurable SLAs for breach notification, deletion, and DSAR assistance?</li></ul></div><div class="sub-sec"><h4 class="sh">Contract recommendation</h4><div class="cr-box">Request a revised DPA that: (1) addresses all Art. 28(3)(a)–(h) provisions with specificity beyond verbatim restatement of the regulation; (2) includes a detailed processing annex identifying data categories, purposes, and storage locations; (3) contains a TOMs annex specifying concrete security controls; (4) includes measurable SLAs for breach notification (≤24 hrs), deletion (≤30 days), and DSAR assistance (≤5 business days); and (5) addresses international transfer mechanisms. Reference EDPB Guidelines 7/2020 and the EC Art. 28 SCC template as baseline standards.</div></div></div>
+    </div>
+  </div>
+</details>
+
+<h2>Framework Certifications</h2>
+<div class="cert-badge">✓ SOC 2 Type II</div>
+<div class="cert-badge">✓ ISO 27001:2022</div>
+<div class="cert-badge">✓ ISO 27701</div>
+
+<h2>AI/ML Analysis</h2>
+<p style="font-size:12px;color:#666;margin-bottom:12px;">Deep D6 analysis by AI Bandit · 2 document(s) analysed</p>
+<table><tbody><tr><td>AI vendor</td><td>No</td></tr><tr><td>Trains on customer data</td><td>False</td></tr><tr><td>Opt-out available</td><td>None</td></tr><tr><td>Legal basis stated</td><td>Yes</td></tr><tr><td>EU AI Act addressed</td><td>Yes</td></tr><tr><td>DPA AI restriction clause</td><td>No</td></tr></tbody></table>
+<p style="margin-top:12px;font-size:12px;color:#444;"></p>
+<h3 style="font-size:13px;margin-top:16px;">Findings</h3>
+<ul><li>Vendor explicitly states no AI or automated decision-making in Section 8 of Privacy Policy — classification as non-AI vendor is well-evidenced</li><li>EU AI Act minimal risk classification is stated but lacks supporting documentation (e.g., impact assessment, governance framework) — vendor should provide or reference AI governance baseline for audit trail</li><li>DPA is fully compliant with GDPR Chapter V transfer mechanisms (SCCs + TIAs) but contains no AI-specific provisions — creates gap if vendor intends future AI use</li><li>All data retention periods are documented and legally justified (Section 3, Appendix A); no indefinite retention of sensitive data</li><li>Special category data (GDPR Art. 9) is explicitly excluded by default; vendor requires separate written addendum for any such processing — strong governance signal</li><li>Legal bases are stated for all processing activities (contract, legal obligation, legitimate interests) but legitimiate interests balancing test details are not published — compliant but opaque</li><li>DPA contains no AI-specific provisions despite vendor's explicit minimal risk classification under EU AI Act — DPA should be updated to prospectively address any future AI use</li><li>Legitimate interests balancing for technical/usage data (Section 2.2) claims service improvement but provides no granular detail of what 'improvement' entails — could benefit from clarification</li><li>IP address anonymisation occurs after 30 days (Section 2.2) but 'anonymised after 30 days' is retention language without clear technical anonymisation method</li><li>SOC 2 Type II and penetration test reports are available 'under NDA' only — limits transparency and auditability for enterprise customers</li></ul><h3 style="font-size:13px;margin-top:16px;">Recommended DPA clause</h3><p style="font-size:12px;color:#444;background:#f9f7f3;padding:12px;border-radius:6px;">Add section to acme-dpa.txt: 'ARTICLE 7 — ARTIFICIAL INTELLIGENCE AND AUTOMATED PROCESSING. 7.1 Processor shall not use, train, fine-tune, or develop AI or machine learning models on Customer Personal Data without prior written instruction from Customer. 7.2 If Customer requests AI-based processing as part of future Services, Processor shall: (a) provide written notice of the nature, purpose, and legal basis of such processing at least 30 days before implementation; (b) make available documentation of bias testing, fairness evaluation, and human oversight mechanisms; (c) establish explicit data segregation between Customer data used for inference and any aggregated training data pools; (d) commit to deletion or return of fine-tuned models within 30 days of contract termination. 7.3 Processor's AI sub-processors (if any) shall be approved separately by Customer and subject to AI-specific Data Processing Agreements.'</p><h3 style="font-size:13px;margin-top:16px;">Questions for vendor</h3><ul><li>Your Privacy Policy claims EU AI Act minimal risk classification. What governance or risk assessment framework supports this classification? Is a documented AI risk assessment available for audit?</li><li>Section 2.2 references 'service improvement' as a legitimate interest for usage/technical data — can you detail what specific service improvements may result, and whether any model development is contemplated?</li><li>Your current DPA (Article 2) states Processor services are 'Hosting, storage, compute, and related technical services.' If future Services include AI/ML capabilities, will you provide a supplemental AI Data Processing Agreement addendum, or update the existing DPA prospectively?</li><li>The 'anomaly detection for security alerting' processing you describe in Section 8 — is this rule-based (threshold alerts on usage patterns) or does it employ any machine learning? Who trains or maintains rules/models if ML-based?</li><li>Can you provide or reference any DPIA or AI impact assessment documentation supporting the minimal risk tier claim, even if at a high level, for GRC compliance verification?</li><li>IP addresses are anonymised after 30 days (Section 2.2). What anonymisation method is used (e.g., salt+hash, aggregation, truncation)? Is reversal possible?</li><li>Your SOC 2 Type II and penetration test reports are available 'under NDA only.' For enterprise customers subject to contractual audit rights, can these be made available under standard NDA without negotiation?</li><li>If Acme engages third-party AI services (e.g., for threat detection, log analysis) in future, will these be listed separately from non-AI sub-processors, and will corresponding AI data processing addenda be required?</li></ul>
+
+<h2>Audit Evidence</h2><p style="font-size:12px;color:#666;margin-bottom:12px;">Analysed by Audit Bandit · 3 document(s)</p><h3 style='font-size:13px;margin-top:12px;'>SOC 2 Type II</h3><table><tbody><tr><td>Audit period end</td><td>2025-03-31</td></tr><tr><td>Current</td><td>No</td></tr><tr><td>Opinion</td><td>unqualified</td></tr><tr><td>Exceptions</td><td>None</td></tr><tr><td>Criteria</td><td>Security, Availability, Confidentiality</td></tr><tr><td>Privacy TSC</td><td>Not included</td></tr><tr><td>Auditor</td><td>Grant Thornton Ireland LLP</td></tr></tbody></table><h3 style='font-size:13px;margin-top:12px;'>ISO 27001</h3><table><tbody><tr><td>Certificate date</td><td>2024-03-01</td></tr><tr><td>Expiry</td><td>2027-02-28</td></tr><tr><td>Current</td><td>Yes</td></tr><tr><td>Scope</td><td>Design, development, and operation of cloud infrastructure and SaaS platform services; All cloud infrastructure services including compute, storage, networking, and database services; Software development and deployment processes; Security operations centre (SOC) and incident response; Human resources security and physical security of offices</td></tr><tr><td>Cert body</td><td>Bureau Veritas Certification Ireland</td></tr></tbody></table><h3 style='font-size:13px;margin-top:12px;'>ISO 27701</h3><table><tbody><tr><td>Current</td><td>Yes</td></tr><tr><td>Cert body</td><td>Bureau Veritas Certification Ireland</td></tr></tbody></table><h3 style="font-size:13px;margin-top:12px;">DPA vs Audit Conflicts</h3><table><thead><tr><th>DPA claim</th><th>Audit evidence</th><th>Severity</th></tr></thead><tbody><tr><td>DPA Article 3.5 states Acme shall assist with data subject rights requests and security obligations (Art. 32).</td><td>SOC 2 Type II report does not explicitly cover data subject access request controls, deletion controls, or DPIA support mechanisms in tested controls.</td><td style='color:#D4A017'>medium</td></tr><tr><td>DPA Annex II claims 'Annual penetration test by accredited third-party' as a security measure.</td><td>SOC 2 Type II report (section 'KEY CONTROL AREAS') references 'annual penetration testing' under CC9 but provides no detail on testing methodology or results.</td><td style='color:#D4A017'>low</td></tr><tr><td>DPA Article 3.6 commits to deletion or return of personal data within 30 days of request.</td><td>SOC 2 Type II report does not include testing of data deletion controls or data return procedures.</td><td style='color:#D4A017'>medium</td></tr></tbody></table><h3 style="font-size:13px;margin-top:12px;">Findings</h3><ul><li>SOC 2 Type II audit uses 2017 TSC framework (section 'AUDIT SCOPE: AICPA (2017 TSC)') rather than current 2022 framework; framework is outdated by 7 years.</li><li>SOC 2 Type II audit period is 6 months (1 October 2024 – 31 March 2025); minimum recommended for Type II is 12 months.</li><li>ISO 27001:2022 certificate issued 1 March 2024 and surveillance audit completed February 2025 with 'no major non-conformities' (ISO 27001 section).</li><li>ISO 27701:2019 certificate present and aligns with ISO 27001; explicitly extends ISMS to include GDPR accountability (Art. 5(2)).</li><li>ISO 27017:2015 (cloud-specific) certificate present; valid until 14 September 2026.</li><li>No control exceptions documented in SOC 2 Type II report; two observations noted and remediated during audit period (legacy service account rotation and vulnerability scan SLA).</li><li>DPA Annex II references ISO 27001:2022 and SOC 2 Type II as certification evidence; alignment confirmed.</li><li>Sub-processor list documented in DPA (Article 4); 4 authorised sub-processors identified with stated data protection mechanisms (SCCs for PagerDuty).</li><li>Penetration test (February 2025, NCC Group CREST-accredited) identified 3 medium findings, all remediated within 72 hours (ISO certificate summary).</li><li>DPA breach notification commitment: 48-hour notification to Customer, supporting 72-hour GDPR Art. 33 obligation (Article 6.1–6.3).</li><li>SOC 2 Type II audit uses deprecated 2017 TSC framework rather than 2022 framework (effective for 18+ months).</li><li>SOC 2 Type II audit period of only 6 months is below industry best practice minimum of 12 months; limits confidence in sustained control effectiveness.</li><li>SOC 2 Type II report is summary format; full report availability limited to NDA-bound customers; procurement teams cannot independently verify control design or testing methodology.</li><li>SOC 2 Type II does not cover Processing Integrity or Privacy TSCs; Privacy controls only evidenced via separate ISO 27701 certificate and DPA claims.</li><li>Data deletion and data subject access request controls are referenced in DPA (Articles 3.5, 3.6) but NOT explicitly tested in SOC 2 Type II report.</li><li>Penetration testing scope (external network, web application, API) does not explicitly cover infrastructure-as-code, container security, or supply chain security.</li><li>SOC 2 Type I report mentioned as dated December 2022 (3.4 years old); currency of baseline control design not evidenced.</li><li>DPA Annex II breach notification SLA is 48 hours to Customer, not 72 hours; creates potential gap if Customer delays supervisory authority notification.</li><li>Transfer Impact Assessments mentioned as 'available upon Customer request' (DPA Article 5.2) but not proactively provided; suggests reactive rather than transparent approach.</li></ul>
+
+<h2>Team Summary</h2>
+<div class="team-wrap"><div class="tp">
+  <div class="tp-hdr" style="background:#4A2E1A">FOR GRC</div>
+  <div class="tp-body">
+    <div class="tp-row"><span class="tp-k">Decision</span><span class="tp-v" style="color:#D4A017;font-weight:700">Approve with conditions</span></div>
+    <div class="tp-row"><span class="tp-k">Detail</span><span class="tp-v">Address flagged gaps before go-live. Negotiate DPA improvements.</span></div>
+    
+    <div class="tp-row"><span class="tp-k">Risk tier</span><span class="tp-v" style="color:#D4A017;font-weight:700">MEDIUM  3.1/5.0</span></div>
+    
+    <div class="tp-row"><span class="tp-k">Assessment depth</span><span class="tp-v">Full (8 dimensions)</span></div>
+    <div class="tp-row"><span class="tp-k">High-risk dims (≤2)</span><span class="tp-v">D2, D5, D7, D8</span></div>
+    <div class="tp-row"><span class="tp-k">Deficient dims (3)</span><span class="tp-v">D6</span></div>
+    <div class="tp-row"><span class="tp-k">Total signal gaps</span><span class="tp-v">59</span></div>
+    <div class="tp-row"><span class="tp-k">Re-assess by</span><span class="tp-v">April 2028 <span style="color:#8B7355;font-size:11px">(730d cadence · MEDIUM profile)</span></span></div>
+    <div class="tp-row"><span class="tp-k">Out-of-cycle triggers</span><span class="tp-v"><div style="font-size:11px;padding:1px 0">✓ Policy change</div><div style="font-size:11px;padding:1px 0">✓ Breach reported</div></span></div>
+  </div>
+</div><div class="tp">
+  <div class="tp-hdr" style="background:#1A3A2A">FOR LEGAL</div>
+  <div class="tp-body"><div style="margin-bottom:12px;padding:10px;background:rgba(26,58,42,.06);border-radius:3px;border:1px solid #A8D5A8"><div class="tp-row"><span class="tp-k">Required changes</span><span class="tp-v" style="color:#8B1A1A;font-weight:700">1 — resolve before signing</span></div><div class="tp-row"><span class="tp-k">Recommended</span><span class="tp-v">9 — negotiate if possible</span></div><div class="tp-row"><span class="tp-k">Conflicts</span><span class="tp-v">0 — policy unbacked by DPA</span></div><div style="font-size:11px;color:#6B5B4E;padding:4px 0">Full legal brief:</div></div><div class="lc-item"><div class="lc-hdr">D2 — Sub-processor Management &nbsp;<span style="color:#8B5A2B">(score 2/5)</span></div><div class="lc-body">Add to DPA §[Sub-processors]: "Processor shall maintain and publish a list of all Sub-processors, including name, country of processing, and processing activity. Processor shall provide Controller with at least 30 days' written notice before adding or replacing any Sub-processor. Controller may object in writing within that period; if Processor cannot accommodate the objection, Controller may terminate the Agreement without penalty. Processor remains fully liable for the acts of its Sub-processors per GDPR Art. 28(4)."</div></div><div class="lc-item"><div class="lc-hdr">D5 — Breach Notification &nbsp;<span style="color:#8B5A2B">(score 2/5)</span></div><div class="lc-body">Add to DPA §[Breach Notification]: "Processor shall notify Controller within 24 hours of becoming aware of a confirmed or reasonably suspected Personal Data Breach affecting Controller Data. The initial notification shall include, to the extent then known, all information required under GDPR Art. 33(3): the nature of the breach, categories and approximate number of data subjects and records affected, likely consequences, and measures taken or proposed. Processor shall provide updates as further information becomes available and shall preserve all forensic evidence for a minimum of 12 months."</div></div><div class="lc-item"><div class="lc-hdr">D6 — AI/ML Data Usage &nbsp;<span style="color:#8B5A2B">(score 3/5)</span></div><div class="lc-body">Add to DPA §[AI and Machine Learning]: "Processor shall not use Controller Data to train, fine-tune, evaluate, or improve any AI or machine learning model without Controller's prior written consent. Where AI/ML processing is separately agreed in writing, Processor shall identify the specific data categories used, the applicable legal basis, and shall provide a prominent opt-out mechanism. Processor shall delete or irreversibly anonymise Controller Data from all training datasets within 30 days of termination, and shall provide written certification of deletion on request."</div></div><div class="lc-item"><div class="lc-hdr">D7 — Retention &amp; Deletion &nbsp;<span style="color:#8B5A2B">(score 2/5)</span></div><div class="lc-body">Add to DPA §[Retention and Deletion]: "Upon expiry or termination of the Agreement, Processor shall, at Controller's election, securely delete or return all Controller Personal Data within 30 days, including all copies held by Sub-processors. Data in backup systems shall be purged within the next scheduled backup rotation cycle, and in any event within 90 days. Processor shall provide written certification of deletion within 10 business days of completion. Processor shall maintain a documented, category-specific retention schedule and provide a copy to Controller on request."</div></div><div class="lc-item"><div class="lc-hdr">D8 — DPA Completeness &nbsp;<span style="color:#8B5A2B">(score 2/5)</span></div><div class="lc-body">Request a revised DPA that: (1) addresses all Art. 28(3)(a)–(h) provisions with specificity beyond verbatim restatement of the regulation; (2) includes a detailed processing annex identifying data categories, purposes, and storage locations; (3) contains a TOMs annex specifying concrete security controls; (4) includes measurable SLAs for breach notification (≤24 hrs), deletion (≤30 days), and DSAR assistance (≤5 business days); and (5) addresses international transfer mechanisms. Reference EDPB Guidelines 7/2020 and the EC Art. 28 SCC template as baseline standards.</div></div></div>
+</div><div class="tp">
+  <div class="tp-hdr" style="background:#1A2A4A">FOR SECURITY</div>
+  <div class="tp-body">
+    <div class="tp-row"><span class="tp-k">D5 Breach Notification</span><span class="tp-v" style="color:#E07832;font-weight:700">2/5 — Minimum compliant</span></div><div class="tp-row"><span class="tp-k">D6 AI/ML Data Usage</span><span class="tp-v" style="color:#D4A017;font-weight:700">3/5 — Minimum compliant</span></div><div class="tp-row"><span class="tp-k">D8 DPA Completeness</span><span class="tp-v" style="color:#E07832;font-weight:700">2/5 — Minimum compliant</span></div>
+    <div class="tp-row"><span class="tp-k">Frameworks evidenced</span><span class="tp-v">soc2_type2_security_only, iso_27001_only</span></div>
+    <div class="tp-row"><span class="tp-k">AI/ML flags</span><span class="tp-v"><span style='color:#6B5B4E'>None</span></span></div>
+    <div class="tp-row"><span class="tp-k">Breach response flags</span><span class="tp-v"><div class="sec-flag">⚠ No operational SLA beyond GDPR verbatim</div></span></div>
+    
+  </div>
+</div></div>
+
+<h2>Pages Analysed</h2>
+<table>
+  <thead><tr><th>#</th><th>URL</th><th>Chars</th><th>Via</th></tr></thead>
+  <tbody><tr><td>1</td><td><a href="https://acme.tech/privacy-policy">https://acme.tech/privacy-policy</a></td><td>204</td><td>direct</td></tr></tbody>
+</table>
+
+<details class="email-det"><summary class="email-sum">Vendor Follow-up Email Template</summary><div class="email-body"><pre>Subject: Privacy &amp; Security Due Diligence — Acme Cloud Services Onboarding Review
+
+Dear [Vendor Privacy/Legal Team],
+
+As part of our vendor onboarding process, we are conducting a privacy and security due diligence review for Acme Cloud Services. We have reviewed your publicly available privacy documentation and have the following follow-up questions.
+
+Please provide written responses by [DATE]:
+
+1. Can you provide your current sub-processor list including each sub-processor's country of operation and data categories processed?
+2. How much advance notice do you provide before adding or replacing a sub-processor, and how is that notice delivered?
+3. If we object to a new sub-processor, what is the process and can we terminate without penalty if the objection is not resolved?
+4. Do our audit rights extend to your sub-processors, and how do you exercise those rights on our behalf?
+5. Can you provide evidence of sub-processor compliance (e.g. their SOC 2 or ISO 27701) on request?
+6. How do you support CCPA rights — access, deletion, opt-out of sale, and correction — for California residents?
+7. What percentage of DSARs do you fulfill within the regulatory deadline? Do you track and report DSAR metrics?
+8. Is your DSAR process manual or automated? What tooling supports it?
+9. How do you verify the identity of individuals submitting data subject requests before acting on them?
+10. What supplementary technical measures do you apply to data transferred outside the EEA (e.g. encryption, pseudonymisation)?
+11. How do you monitor changes to EU adequacy decisions or SCC requirements that could affect our transfers?
+12. What is your committed timeline for notifying us of a personal data breach affecting our data?
+13. Can you confirm your breach notifications will include all Art. 33(3) elements — nature of breach, data categories and volumes, likely consequences, and measures taken?
+14. Who is your designated incident response lead, and how do we contact them in an emergency?
+15. Does your breach notification obligation cover suspected incidents, or only confirmed breaches?
+16. What is your process for preserving forensic evidence during and after a security incident?
+17. Do you support phased breach reporting per Art. 33(4) — an initial notification followed by updates as information becomes available?
+18. How do you define the moment your 72-hour notification obligation is triggered — discovery, internal escalation, or another event?
+19. What obligation do your sub-processors have to notify you of incidents, and what are your escalation timelines?
+20. Do you use our data to train AI or ML models? If so, is this disclosed as a separate processing purpose with its own legal basis?
+21. What legal basis do you rely on for processing our data for AI/ML training purposes?
+22. Which specific categories of our data are used to train or improve AI models?
+23. Where in your product or DPA can we find and exercise the AI training opt-out — is it available without opening a support ticket?
+24. How do you ensure our data is not commingled with other customers' data in your AI training pipelines?
+25. How long do you retain data used for AI model training, and is this separate from your main retention schedule?
+26. Does your DPA include an explicit clause restricting use of our data for AI training without our prior written consent?
+27. Do you require opt-in consent (rather than opt-out) before using our data for AI model training?
+28. Can you provide documentation on the provenance of training data used in models that process our data?
+29. What are your general data retention periods, and what triggers the start of the retention clock?
+30. What is your standard process for deleting or returning our data at contract end?
+31. How do you handle deletion of data derived or aggregated from our data — including analytics outputs and model weights?
+32. Do you maintain a separate retention schedule for data used in AI model training, including when model weights derived from our data are deleted?
+33. What deletion obligations do you impose on sub-processors, and how do you verify their compliance?
+34. Can you provide a detailed processing annex identifying data types, purposes, storage locations, and access controls?
+35. Does your DPA include a specific annex detailing your technical and organisational security measures?
+36. Does your DPA include measurable SLAs for breach notification, deletion, and DSAR assistance?
+37. Does your DPA include the required CCPA/CPRA service provider provisions?
+38. Does your DPA specify the legal mechanisms used for each international data transfer?
+39. What independent audit reports can you provide — SOC 2 Type II, ISO 27701 certificate, or similar?
+40. Does your DPA include a clause explicitly restricting use of our data for AI/ML training?
+
+Please also provide copies of the following:
+  • Most recent SOC 2 Type II audit report (Privacy Trust Services Criteria preferred)
+  • Current signed Data Processing Agreement (or your standard template)
+  • Sub-processor list with countries of processing
+  • ISO 27701 certificate (if applicable)
+  • Any Transfer Impact Assessment (TIA) in place for EEA data transfers
+
+We aim to complete our review within [X] business days of receiving your full responses. Please confirm receipt of this request and your expected response timeline.
+
+Thank you for your cooperation.
+
+Best regards,
+[Your Name]
+[Title] | GRC / Privacy Team
+[Company]
+[Email]</pre></div></details>
+
+<div class="footer">
+  <span>Generated by <a href="https://github.com/conorrusso/bandit">Bandit</a> v1.5.2 &nbsp;·&nbsp; claude-haiku-4-5-20251001 &nbsp;·&nbsp; Rubric v1.0.0</span>
+  <span>2026-04-30 16:59 UTC</span>
+</div>
+
+</body>
+</html>

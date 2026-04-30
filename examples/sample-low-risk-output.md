@@ -1,24 +1,20 @@
 # Sample Output — Low Risk Assessment
 
-> **Note:** This sample is from an earlier version of Bandit and will be regenerated with the current report format. Refer to it as illustrative, not definitive.
+**Bandit v1.5.2 | Rubric: v1.0.0**
+*This is a fictional example for demonstration purposes. All vendor names and documents are invented.*
 
-**Bandit v1.0 | Prompt: PB-1 v1.0**
-*This is a fictional example for demonstration purposes.*
+> The HTML version of this report is at `examples/sample-low-risk-output.html`.
 
 ---
 
 ## Assessment Metadata
 
-```json
-{
-  "assessment_metadata": {
-    "vendor_name": "ClearData Solutions GmbH",
-    "policy_url": "https://example-cleardata.eu/datenschutz",
-    "assessment_date": "2025-09-15",
-    "prompt_version": "PB-1 v1.0",
-    "model_used": "claude-opus-4-6"
-  }
-}
+```
+Vendor:          Acme Cloud Services
+Input:           Local documents (/tmp/bandit_samples/acme/)
+Assessment date: 2026-04-30
+Model:           claude-haiku-4-5-20251001
+Rubric:          v1.0.0
 ```
 
 ---
@@ -27,157 +23,71 @@
 
 | Dim | Label | Score | Risk |
 |-----|-------|-------|------|
-| D1 | Data Collection Scope | 1 | Low |
-| D2 | Data Retention & Deletion | 2 | Acceptable |
-| D3 | Third-Party Data Sharing | 1 | Low |
-| D4 | International Data Transfers | 1 | Low |
-| D5 | User Rights & Enforcement | 1 | Low |
-| D6 | Security & Breach Notification | 2 | Acceptable |
-| D7 | AI & Automated Decision-Making | 1 | Low |
-| D8 | Governance & Accountability | 1 | Low |
+| D1 | Data Minimization | 5 | Gold standard |
+| D2 | Sub-processor Management | 2 | Minimum compliance |
+| D3 | Data Subject Rights | 4 | Strong |
+| D4 | Cross-Border Transfer Mechanisms | 4 | Strong |
+| D5 | Breach Notification | 2 | Minimum compliance |
+| D6 | AI/ML Data Usage | 3 | Minimum compliance |
+| D7 | Retention & Deletion | 2 | Strong |
+| D8 | DPA Completeness | 2 | Minimum compliance |
+
+**Overall: MEDIUM — 3.1 / 5.0**
 
 ---
 
-## Detailed Findings
+## Frameworks Detected
 
-### D1 — Data Collection Scope | Score: 1
-
-**Rationale:** The policy provides an exhaustive, categorised list of data types collected, each linked to a specific processing purpose and legal basis. Sensitive data categories are explicitly named as not collected unless contractually agreed in advance. Data minimisation is explicitly referenced as a guiding principle.
-
-**Evidence Quotes:**
-- *"We collect only the following categories of personal data, each linked to a specific processing purpose as set out in Schedule 1 of this policy: [full enumerated list follows]."*
-- *"We do not collect special categories of personal data as defined in GDPR Article 9 unless explicitly agreed in a separate Data Processing Schedule."*
-- *"Our data collection practices are guided by the principle of data minimisation (GDPR Art. 5(1)(c)). We collect only what is strictly necessary."*
-
-**Regulatory Gaps:** None identified.
+- ✓ SOC 2 Type II (Security)
+- ✓ ISO 27001:2022
 
 ---
 
-### D2 — Data Retention & Deletion | Score: 2
+## Red Flags
 
-**Rationale:** Retention periods are specified for most data categories in a dedicated retention schedule appended to the policy. One category ("support correspondence") lists only "up to 3 years" without a more specific trigger. Deletion is automated with written confirmation available on request. Minor gap noted on backup retention specifics.
-
-**Evidence Quotes:**
-- *"Retention periods for each data category are set out in our Retention Schedule (Appendix B), ranging from 30 days (session logs) to 7 years (invoicing records, per legal obligation)."*
-- *"Personal data is automatically deleted at the end of its retention period. You may request written confirmation of deletion."*
-- *"User-initiated deletion requests are processed within 14 days."*
-
-**Regulatory Gaps:**
-- GDPR Art. 5(1)(e) — minor: backup retention period not explicitly stated (recommend clarification)
+- **[D5, D8]** No operational SLA beyond GDPR verbatim — breach notification stated as "without undue delay" only, no specific hour commitment in DPA
+- **[—]** stale_audit_no_bridge — SOC 2 audit period ended 12–18 months ago with no bridge letter
 
 ---
 
-### D3 — Third-Party Data Sharing | Score: 1
+## Key Findings by Dimension
 
-**Rationale:** A complete sub-processor list is published and linked from the policy, with commit to 30-day advance notice of any additions. Data is explicitly never sold or used for advertising. All sub-processors are bound by DPAs with equivalent protections.
+### D1 — Data Minimization | Score: 5
 
-**Evidence Quotes:**
-- *"We maintain a current list of all sub-processors at [link]. We provide 30 days' notice of any new sub-processor appointment."*
-- *"We do not sell, rent, or share personal data with third parties for marketing or advertising purposes."*
-- *"All sub-processors are contractually bound to process data only on our instructions and to maintain equivalent security standards."*
+Comprehensive data minimisation policy. All categories enumerated with specific legal basis per category (contract, legal obligation, legitimate interests). Special category data explicitly excluded unless separately agreed. Privacy by Design embedded in SDLC with DPIA screening. Retention schedule in appendix with specific periods per category.
 
-**Regulatory Gaps:** None identified.
+### D2 — Sub-processor Management | Score: 2
 
----
+Public sub-processor list maintained with named sub-processors. 30-day advance notice of new sub-processors. Contractual flowdown obligations in place. Gap: DPA does not explicitly grant right to object with contract termination option if objection upheld.
 
-### D4 — International Data Transfers | Score: 1
+### D3 — Data Subject Rights | Score: 4
 
-**Rationale:** The vendor is headquartered in Germany and processes all data within the EU/EEA. For the limited use of US-based sub-processors (AWS EU regions), Standard Contractual Clauses are in place with Transfer Impact Assessments completed and available to customers upon request.
+All GDPR Arts. 15–21 rights explicitly enumerated with individual explanations. 30-day response timeline stated, extendable 60 days with notice. Irish DPC complaint pathway provided. Gap: no CCPA rights or automated DSAR workflow.
 
-**Evidence Quotes:**
-- *"All personal data is processed within the European Economic Area. Our primary infrastructure is located in Frankfurt (AWS eu-central-1) and Amsterdam (AWS eu-west-1)."*
-- *"Where we engage US-based sub-processors, we rely on EU Standard Contractual Clauses (2021 SCCs) as our transfer mechanism. Transfer Impact Assessments are available to customers upon written request."*
+### D4 — Cross-Border Transfer Mechanisms | Score: 4
 
-**Regulatory Gaps:** None identified.
+Primary processing within EEA (Dublin, Frankfurt). EU Standard Contractual Clauses (2021) used for US sub-processors. Transfer Impact Assessments completed and available on request. Named sub-processor locations specified. Gap: no supplementary measures documented beyond SCCs; no monitoring process for adequacy changes.
 
----
+### D5 — Breach Notification | Score: 2
 
-### D5 — User Rights & Enforcement | Score: 1
+Breach notification obligation stated in DPA. 48-hour Customer notification commitment. Gap: no operational SLA specifying response lead or breach categories. Red flag: DPA uses "without undue delay" rather than a specific-hour commitment for DPA notification, falling back on GDPR verbatim.
 
-**Rationale:** All GDPR data subject rights (Art. 15–21) are explicitly enumerated with individual explanations. Response timeline is 30 days (extendable to 90 days for complex requests with notification). A direct link to the German DPA (BfDI) complaint pathway is provided.
+### D6 — AI/ML Data Usage | Score: 3
 
-**Evidence Quotes:**
-- *"You have the following rights under GDPR: [Art. 15 access, Art. 16 rectification, Art. 17 erasure, Art. 18 restriction, Art. 20 portability, Art. 21 objection — each described in detail]."*
-- *"We will respond to all data subject requests within 30 days. For complex requests, we may extend this by a further 60 days with notice."*
-- *"You have the right to lodge a complaint with the BfDI (Federal Commissioner for Data Protection and Freedom of Information): www.bfdi.bund.de."*
+Policy explicitly states no AI used for decisions with legal or similarly significant effects (GDPR Art. 22 compliant). No customer data used for model training. Automated anomaly detection reviewed by humans. Gap: AI not disclosed as a separate processing purpose with its own legal basis entry.
 
-**Regulatory Gaps:** None identified.
+### D7 — Retention & Deletion | Score: 2
+
+Category-specific retention schedule (Appendix A) with periods from 30 days (backups) to 7 years (billing). Automated deletion with written confirmation available. 14-day deletion request processing. 30-day backup purge commitment. Gap: derived data and AI inference data retention not addressed; sub-processor deletion obligations not specified in DPA.
+
+### D8 — DPA Completeness | Score: 2
+
+Most GDPR Art. 28 provisions present: processing restrictions, confidentiality, sub-processor management, data subject rights assistance, deletion. Annex II lists technical measures. Gap: audit rights limited to one per year with 30-day notice; DPA does not specify breach categories or escalation matrix.
 
 ---
 
-### D6 — Security & Breach Notification | Score: 2
+## Recommended Actions
 
-**Rationale:** Security measures are described with reasonable specificity (encryption in transit and at rest, role-based access, annual penetration testing). SOC 2 Type II audit is referenced but the report is not publicly available. Breach notification within 72 hours to the DPA is committed to in writing.
-
-**Evidence Quotes:**
-- *"We implement: AES-256 encryption at rest; TLS 1.3 in transit; role-based access controls with MFA required; annual third-party penetration testing."*
-- *"We hold SOC 2 Type II certification. Reports are available to enterprise customers under NDA."*
-- *"In the event of a personal data breach, we will notify the competent supervisory authority within 72 hours of becoming aware and notify affected individuals without undue delay where required."*
-
-**Regulatory Gaps:**
-- GDPR Art. 32 — minor: ISO 27001 not held; SOC 2 report not publicly available (recommend requesting report as part of vendor due diligence)
-
----
-
-### D7 — AI & Automated Decision-Making | Score: 1
-
-**Rationale:** The policy explicitly states no AI is used in processing personal data beyond spam filtering, which is categorised as not producing legal or similarly significant effects. No model training on customer data occurs. EU AI Act classification is noted as "minimal risk."
-
-**Evidence Quotes:**
-- *"We do not use artificial intelligence or automated decision-making that produces legal or similarly significant effects on individuals (GDPR Art. 22)."*
-- *"Automated spam filtering is the only ML-based process applied to personal data. This is classified as minimal-risk under the EU AI Act 2024."*
-- *"We do not use customer data to train or improve AI or machine learning models."*
-
-**Regulatory Gaps:** None identified.
-
----
-
-### D8 — Governance & Accountability | Score: 1
-
-**Rationale:** A named DPO with contact details is provided. Legal bases for each processing activity are listed in a table. Privacy by Design is referenced in the development lifecycle section. ROPA maintenance is confirmed.
-
-**Evidence Quotes:**
-- *"Our Data Protection Officer is Dr. Anna Weber (dpo@example-cleardata.eu, +49 30 1234567)."*
-- *"The legal basis for each processing activity is set out in the Processing Register (Appendix A), which includes: contract performance (Art. 6(1)(b)), legal obligation (Art. 6(1)(c)), and legitimate interests (Art. 6(1)(f)) with balancing tests available on request."*
-- *"Privacy by Design is embedded in our software development lifecycle (SDLC). All new features undergo a Data Protection Impact Assessment (DPIA) screening before development begins."*
-
-**Regulatory Gaps:** None identified.
-
----
-
-## Overall Assessment
-
-```json
-{
-  "overall_assessment": {
-    "privacy_risk_score": 1.28,
-    "risk_level": "Low",
-    "weighted_calculation_note": "D7 and D4 weighted 1.5x. Formula: (1+2+1+1+1+2+(1×1.5)+(1×1.5)) / 9 = 1.28",
-    "summary": "ClearData Solutions GmbH presents a low overall privacy risk (PRS 1.28/5.0) and demonstrates strong GDPR compliance maturity. The policy is transparent, specific, and operationalizable. The two minor gaps — backup retention specificity and SOC 2 report availability — do not pose material compliance risk and can be addressed through standard vendor questionnaire.",
-    "top_3_risks": [
-      {
-        "dimension": "D2",
-        "finding": "Backup retention period not explicitly stated — minor gap, recommend vendor clarification"
-      },
-      {
-        "dimension": "D6",
-        "finding": "SOC 2 Type II report available to enterprise customers only under NDA — request as part of procurement"
-      },
-      {
-        "dimension": "D2",
-        "finding": "Support correspondence retention ('up to 3 years') could be more precisely defined"
-      }
-    ],
-    "recommended_actions": [
-      "Proceed with standard procurement approval",
-      "Request SOC 2 Type II report under NDA before contract execution",
-      "Clarify backup retention period via vendor questionnaire",
-      "Ensure DPA (GDPR Art. 28) is in place before processing EU personal data",
-      "Log in vendor register with annual review date"
-    ],
-    "dpa_required": true,
-    "dpo_escalation_required": false,
-    "legal_review_required": false
-  }
-}
-```
+- **GRC:** Flag specific gaps for contract negotiation.
+- **Legal:** Negotiate DPA improvements — add breach SLA hours, sub-processor objection-with-termination right, derived data deletion.
+- **Security:** Verify sub-processor list; confirm SOC 2 bridge letter or request most recent report.
