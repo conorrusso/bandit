@@ -59,6 +59,7 @@ output/
 exports/
 reports/
 reports/local/
+.audit_temp/
 
 # Python (if using scripts)
 __pycache__/
@@ -66,3 +67,16 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
+# Dev artifacts and Claude Code prompts
+*_PROMPT.md
+*_PROMPT.txt
+/home/claude/
+
+# Test and coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Local research and notes
+/research/
