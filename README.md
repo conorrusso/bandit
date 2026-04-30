@@ -64,13 +64,13 @@ bandit setup --drive
 
 ```bash
 # Public privacy policy only
-bandit assess "Salesforce"
+bandit assess "Acme Corp"
 
 # With local documents
-bandit assess "Salesforce" --docs ./vendor-docs/Salesforce/
+bandit assess "Acme Corp" --docs ./vendor-docs/acme/
 
 # With Google Drive
-bandit assess "Salesforce" --drive
+bandit assess "Acme Corp" --drive
 ```
 
 ---
@@ -112,20 +112,20 @@ bandit sync                      Sync with Drive — discovers, links, pulls doc
 
 | Format | Example | Behaviour |
 |--------|---------|-----------|
-| Company name | `"Salesforce"` | Full discovery: DDG search → domain probe → AI reasoning |
-| Bare domain | `hubspot.com` | Skips domain resolution, probes privacy paths directly |
-| Full URL | `https://acme.com/privacy` | Skips all discovery, fetches directly |
+| Company name | `"Acme Corp"` | Full discovery: DDG search → domain probe → AI reasoning |
+| Bare domain | `acme.example.com` | Skips domain resolution, probes privacy paths directly |
+| Full URL | `https://acme.example.com/privacy` | Skips all discovery, fetches directly |
 
 ### Batch assessment
 
 Create a text file with one vendor per line (names, domains, or URLs — any format):
 
 ```
-Salesforce
-hubspot.com
-https://notion.so/privacy
-# This line is ignored
 Acme Corp
+beta.example.com
+https://gamma.example.com/privacy
+# This line is ignored
+Delta Corp
 ```
 
 Run:
@@ -145,9 +145,9 @@ HTML reports are saved to `./reports/` after every run. The batch command prints
 Run a full privacy risk assessment for one vendor.
 
 ```bash
-bandit assess "Salesforce"                           # company name
-bandit assess salesforce.com                         # domain
-bandit assess https://salesforce.com/privacy         # full URL
+bandit assess "Acme Corp"                            # company name
+bandit assess acme.example.com                       # domain
+bandit assess https://acme.example.com/privacy       # full URL
 bandit assess "Acme Corp" --verbose                  # show all stages
 bandit assess "Acme Corp" --json > acme.json         # raw JSON output
 bandit assess "Acme Corp" --no-report                # skip HTML report
@@ -200,7 +200,7 @@ If no config exists, Bandit prompts you to run setup before the assessment start
 Show the vendor function profile for any vendor — what category it belongs to, weight modifiers that apply, and documents expected.
 
 ```bash
-bandit profile "Salesforce"    # Detect and show profile
+bandit profile "Acme Corp"     # Detect and show profile
 bandit profile --show          # List all cached profiles
 bandit profile --unknown       # Show vendors with unknown classification
 ```
@@ -272,7 +272,7 @@ Bandit supports public privacy policies, local document folders, and Google Driv
 
 ```bash
 # Single vendor
-bandit assess "Salesforce" --docs ./vendor-docs/Salesforce/
+bandit assess "Acme Corp" --docs ./vendor-docs/acme/
 
 # Batch with auto-matching
 bandit batch vendors.txt --docs-root ./vendor-docs/
@@ -282,11 +282,11 @@ Folder structure:
 
 ```
 vendor-docs/
-├── Salesforce/
+├── Acme Corp/
 │   ├── dpa.pdf
 │   ├── msa.pdf
 │   └── soc2-2025.pdf
-└── HubSpot/
+└── BetaCorp/
     └── dpa.pdf
 ```
 
@@ -300,7 +300,7 @@ Supports: PDF · DOCX · HTML · TXT · MD · JSON
 bandit setup --drive
 
 # Assess with Drive documents
-bandit assess "Salesforce" --drive
+bandit assess "Acme Corp" --drive
 
 # Batch with Drive
 bandit batch vendors.txt --drive
@@ -412,7 +412,7 @@ Check the manifest output — the DPA may have failed to extract (scanned PDF) o
 Bandit requires PDFs with a text layer. Request a native PDF from your vendor. OCR support for scanned PDFs is coming in v1.2.
 
 **Google Drive: "Vendor folder not found"**
-The subfolder name must match the vendor name. Check spelling and case. Example: folder "Salesforce" matches `bandit assess "Salesforce"`.
+The subfolder name must match the vendor name. Check spelling and case. Example: folder "Acme Corp" matches `bandit assess "Acme Corp"`.
 
 **Google Drive: token expired or "403 Insufficient Permission"**
 Delete the token and re-authenticate:
