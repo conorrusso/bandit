@@ -889,52 +889,31 @@ def write_html_report(
         "iso_42001_certified":      "ISO 42001",
     }
 
-    # Read directly from audit_bandit_result.raw_result — the authoritative source.
-    # The AgentResult.signals dict holds the flattened + derived signals (currency_status etc.)
-    _ab_result = getattr(result, "audit_bandit_result", None)
-    _ab_raw  = _ab_result.raw_result if (_ab_result and _ab_result.success) else {}
-    _ab_sigs = _ab_result.signals   if (_ab_result and _ab_result.success) else {}
+    _audit_raw = getattr(
+        getattr(result, "audit_bandit_result", None),
+        "raw_result", {}
+    ) or {}
+    _soc2 = _audit_raw.get("soc2_signals", {})
+    _iso_27001 = _audit_raw.get("iso_27001_signals", {})
+    _iso_27701 = _audit_raw.get("iso_27701_signals", {})
+    _iso_42001 = _audit_raw.get("iso_42001_signals", {})
 
-    if _ab_raw:
-        _cert_items = []
+    _certs_html = []
+    if _soc2.get("soc2_type2_present") is True:
+        _certs_html.append('<div class="cert-badge">✓ SOC 2 Type II</div>')
+    elif _soc2.get("soc2_type1_present") is True:
+        _certs_html.append('<div class="cert-badge">✓ SOC 2 Type I</div>')
+    if _iso_27001.get("iso_27001_present") is True:
+        _certs_html.append('<div class="cert-badge">✓ ISO 27001:2022</div>')
+    if _iso_27701.get("iso_27701_present") is True:
+        _certs_html.append('<div class="cert-badge">✓ ISO 27701</div>')
+    if _iso_42001.get("iso_42001_present") is True:
+        _certs_html.append('<div class="cert-badge">✓ ISO 42001</div>')
 
-        _soc2s = _ab_raw.get("soc2_signals", {})
-        if _soc2s.get("soc2_type2_present") or _soc2s.get("soc2_type1_present"):
-            _soc2_type    = "Type II" if _soc2s.get("soc2_type2_present") else "Type I"
-            _soc2_curr    = _ab_sigs.get("currency_status", "unknown")
-            _soc2_label   = "✓ Current" if str(_soc2_curr).startswith("current") else ("⚠ Stale" if _soc2_curr == "stale" else "⚠ Outdated")
-            _soc2_privacy = " · Privacy TSC" if _soc2s.get("tsc_privacy_in_scope") else ""
-            _soc2_except  = f" · {_soc2s.get('exception_count', '?')} exception(s)" if _soc2s.get("exceptions_found") else ""
-            _soc2_firm    = f" · {_soc2s['auditor_firm_name']}" if _soc2s.get("auditor_firm_name") else ""
-            _cert_items.append(f"SOC 2 {_soc2_type} — {_soc2_label}{_soc2_privacy}{_soc2_except}{_soc2_firm}")
-
-        _iso1s = _ab_raw.get("iso_27001_signals", {})
-        if _iso1s.get("iso_27001_present"):
-            _iso1_curr  = _ab_sigs.get("iso_27001_currency_status", "unknown")
-            _iso1_label = "✓ Current" if str(_iso1_curr).startswith("current") else "⚠ Expired/Stale"
-            _iso1_inv   = " · ⚠ Unaccredited body" if _iso1s.get("iso_27001_certification_body_accredited") is False else ""
-            _cert_items.append(f"ISO 27001 — {_iso1_label}{_iso1_inv}")
-
-        _iso7s = _ab_raw.get("iso_27701_signals", {})
-        if _iso7s.get("iso_27701_present"):
-            _iso7_curr  = _ab_sigs.get("iso_27701_currency_status", "unknown")
-            _iso7_label = "✓ Current" if str(_iso7_curr).startswith("current") else "⚠ Expired/Stale"
-            _cert_items.append(f"ISO 27701 — {_iso7_label}")
-
-        _iso4s = _ab_raw.get("iso_42001_signals", {})
-        if _iso4s.get("iso_42001_present"):
-            _iso4_curr  = _ab_sigs.get("iso_42001_currency_status", "unknown")
-            _iso4_label = "✓ Current" if str(_iso4_curr).startswith("current") else "⚠ Expired/Stale"
-            _cert_items.append(f"ISO 42001 — {_iso4_label}")
-
-        if _cert_items:
-            fw_html = (
-                "<ul class='fw-list'>"
-                + "".join(f"<li>✓&nbsp; {item}</li>" for item in _cert_items)
-                + "</ul>"
-            )
-        else:
-            fw_html = '<p class="none-p">Audit documents provided but no current certifications found.</p>'
+    if _certs_html:
+        fw_html = "\n".join(_certs_html)
+    elif _audit_raw:
+        fw_html = '<p class="none-p">Audit documents provided but no current certifications found.</p>'
     else:
         # No Audit Bandit result — fall back to doc-type detection
         _fw_labels_detected = [
@@ -1246,6 +1225,9 @@ details[open] .arr{{transform:rotate(90deg)}}
 /* ── Frameworks / Sources tables ── */
 .fw-list{{list-style:none;padding:0}}
 .fw-list li{{padding:5px 0;border-bottom:1px solid var(--bd);color:#1A5C2A}}
+.cert-badge{{display:inline-block;padding:4px 12px;border-radius:3px;
+  background:#E8F5EC;color:#1A5C2A;font-weight:700;font-size:12px;
+  margin:3px 4px 3px 0;border:1px solid #B8DDBE}}
 table{{width:100%;border-collapse:collapse}}
 td,th{{padding:7px 10px;border-bottom:1px solid var(--bd);vertical-align:top;text-align:left;font-size:12px}}
 th{{background:rgba(139,90,43,.07);font-weight:700;font-size:9px;

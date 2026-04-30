@@ -604,15 +604,21 @@ def assess(
         legal_report_path = None
         _legal_result = getattr(assessment.result, "legal_bandit_result", None)
         if _legal_result and not no_legal_brief:
-            from core.reports.legal_report import generate_legal_brief
-            legal_report_path = str(report_path).replace(".html", "-legal.html")
-            generate_legal_brief(
-                result=_legal_result,
-                output_path=legal_report_path,
-            )
-            console.print(
-                f"  [color(243)]Legal brief  →[/] [color(172)]{legal_report_path}[/]"
-            )
+            try:
+                from core.reports.legal_report import generate_legal_brief
+                legal_report_path = str(report_path).replace(".html", "-legal.html")
+                generate_legal_brief(
+                    result=_legal_result,
+                    output_path=legal_report_path,
+                )
+                console.print(
+                    f"  [color(243)]Legal brief  →[/] [color(172)]{legal_report_path}[/]"
+                )
+            except Exception as _lb_exc:
+                console.print(
+                    f"  [color(220)]⚠[/]  [color(245)]Legal brief failed: {_lb_exc}[/]"
+                )
+                legal_report_path = None
 
         # ── Save report to Drive if --drive and auto_save_reports ─────
         if drive:
