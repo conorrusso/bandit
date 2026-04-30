@@ -1,5 +1,7 @@
 # Sample Output — Low Risk Assessment
 
+> **Note:** This sample is from an earlier version of Bandit and will be regenerated with the current report format. Refer to it as illustrative, not definitive.
+
 **Bandit v1.0 | Prompt: PB-1 v1.0**
 *This is a fictional example for demonstration purposes.*
 
