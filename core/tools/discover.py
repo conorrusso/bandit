@@ -122,7 +122,7 @@ def _normalise(vendor: str) -> tuple[str, list[str]]:
     """
     Return (primary_slug, candidate_slugs) for a vendor string.
 
-    "Anecdotes AI Inc"  → ("anecdotes", ["anecdotes"])
+    "Acme Corp Inc"     → ("acme",      ["acme"])
     "HubSpot"           → ("hubspot",   ["hubspot", "hub"])
     "acme.com"          → ("acme",      ["acme"])
     """
@@ -403,7 +403,7 @@ def _stage3_ai_reason(
         f"Tech/AI companies often use .ai or .io, developer tools use .dev, "
         f"newer startups use .co. If this is a well-known company, reason about "
         f"what you know about their actual domain.\n\n"
-        f'Respond with a JSON object, e.g.: {{"domain": "anecdotes.ai"}}'
+        f'Respond with a JSON object, e.g.: {{"domain": "acme.example.com"}}'
     )
     try:
         result = provider.complete_json(prompt=prompt, max_tokens=64)

@@ -99,7 +99,7 @@ bandit assess <vendor> [OPTIONS]
 ```bash
 bandit assess "Salesforce"
 bandit assess hubspot.com --verbose
-bandit assess https://anecdotes.ai/privacy
+bandit assess https://acme.example.com/privacy
 bandit assess "Acme Corp" --json > acme.json
 bandit assess "Acme Corp" --model claude-opus-4-6
 bandit assess "Acme Corp" --no-report
@@ -339,7 +339,7 @@ bandit rubric --dim D6
 
 ```
 bandit assess "Salesforce"
-bandit assess "Anecdotes AI"
+bandit assess "Acme Corp"
 ```
 
 Full discovery pipeline: DDG search → domain probe → AI reasoning → homepage scrape.
@@ -350,7 +350,7 @@ Contains a dot, no spaces. Skips domain resolution. Probes common privacy paths 
 
 ```
 bandit assess hubspot.com
-bandit assess anecdotes.ai
+bandit assess acme.example.com
 ```
 
 ### Full URL
@@ -358,7 +358,7 @@ bandit assess anecdotes.ai
 Starts with `https://`. Skips all discovery and fetches the URL directly. Use this if discovery finds the wrong page.
 
 ```
-bandit assess https://anecdotes.ai/privacy
+bandit assess https://acme.example.com/privacy
 bandit assess https://legal.hubspot.com/privacy-policy
 ```
 
@@ -433,7 +433,7 @@ HubSpot
 Notion
 
 # With direct URL (skips discovery)
-Anecdotes, https://anecdotes.ai/privacy
+Acme Corp, https://acme.example.com/privacy
 
 # With vendor function profiling
 NetSuite,,financial_processing,hr_people
@@ -488,7 +488,7 @@ HTML reports are saved to `./reports/` by default, named `<vendor-slug>-<date>.h
 Examples:
 - `reports/salesforce-2026-03-29.html`
 - `reports/hubspot-com-2026-03-29.html`
-- `reports/anecdotes-ai-2026-03-29.html`
+- `reports/acme-corp-2026-03-29.html`
 
 ---
 

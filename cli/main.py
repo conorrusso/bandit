@@ -1954,7 +1954,7 @@ def _vendor_slug(vendor: str) -> str:
 
     "Salesforce"   → "salesforce"
     "HubSpot"      → "hubspot"
-    "Anecdotes AI" → "anecdotes-ai"
+    "Acme Corp"    → "acme-corp"
     """
     import re
     s = vendor.strip().lower()

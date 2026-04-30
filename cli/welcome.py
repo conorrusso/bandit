@@ -97,7 +97,7 @@ def show_welcome(console: Console | None = None) -> None:
     ex_lines = Text()
     for ex in [
         'bandit assess "Salesforce"',
-        'bandit assess anecdotes.ai --verbose',
+        'bandit assess hubspot.com --verbose',
         'bandit assess "HubSpot" --docs ./vendor-docs/HubSpot/',
         'bandit assess "Salesforce" --drive',
         'bandit batch vendors.txt --docs-root ./vendor-docs/',
